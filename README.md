@@ -1,65 +1,72 @@
 # Skynet Agentry
 
-Status: **v0.0a (spec series complete, pre-implementation)**
+Status: **v0.0a-final (spec complete, pre-implementation)**
 
-Skynet Agentry is an **orchestrator + watchdog pair** that runs continuously on a single host, rents AI worker agents from cloud and local providers, and ships features end-to-end on any compliant target repository — Researcher, Architect, Implementer, Tester, PR Author, Reviewer, Release Engineer — with the Operator (the human running it) reserved for emergency overrides, policy changes, and onboarding new targets.
+Skynet Agentry is a small Python daemon that runs **6 forever-loops in parallel**, one per role. Each loop spawns an LLM CLI subprocess (Claude Code, Codex CLI, etc.) at its own interval, the subprocess does its job using the rules defined in the target repo, and exits. The daemon supervises: timeouts, restarts, Discord pings.
 
-The agents are commodity workers (Claude, GPT-5, local Llama, whatever the Operator assigns). The orchestrator is the value.
+That's the whole product. ~200 lines of Python.
 
-> **The contractor metaphor.** Skynet Agentry is a contractor you hire once. You give it a job description (`.skynet/config.yml`). It hires gig workers from the AI spot market. It supervises them, fires the ones that don't work, calls in backups. You get a Discord ping when something interesting happens.
+State lives in GitHub (issues, labels, PRs, branches). The daemon has no persistent state. Restart it any time.
+
+## The 6 roles
+
+| Role | Reads | Produces |
+|------|-------|----------|
+| **Researcher** | repo + web | new issues for missing features |
+| **Architect** | issues `ready-for-design` | design docs, relabels `ready-for-implementation` |
+| **Implementer** | issues `ready-for-implementation` | code on a branch, relabels `ready-for-test` |
+| **Tester** | issues `ready-for-test` | runs tests; if green opens PR `ready-for-review`, if red `tests-failed` |
+| **Reviewer** | PRs `ready-for-review` | approves OR `blocked` |
+| **Release Engineer** | merged commits since last tag | tag + build + GitHub Release |
+
+Each role gets its own model assignment. Operator picks: Claude for research, Codex for implementation, local Llama for review, etc.
+
+## What target repos provide
+
+A repo is "Skynet-ready" when it has:
+
+```
+target-repo/
+├── .skynet/config.yml                ← agent assignments + timeouts
+└── docs/ai/roles/
+    ├── researcher.md                  ← project-specific instructions per role
+    ├── architect.md
+    ├── implementer.md
+    ├── tester.md
+    ├── reviewer.md
+    └── release.md
+```
+
+Plus 6 GitHub labels (`ready-for-design`, `ready-for-implementation`, `ready-for-test`, `tests-failed`, `ready-for-review`, `blocked`) — created by `skynet doctor --init-labels`.
+
+The framework prompts are generic ("read docs/ai/roles/X.md and follow it"). The actual work instructions live in the repo. Different repos can have different conventions.
 
 ## Read in this order
 
-1. **[`docs/architecture.md`](docs/architecture.md)** — full architecture and design (20 sections)
+1. **[`docs/architecture.md`](docs/architecture.md)** — the lean design (~250 lines)
 2. **[`docs/how-to-use.md`](docs/how-to-use.md)** — Operator's practical guide
-3. **[`docs/v0.1-plan.md`](docs/v0.1-plan.md)** — concrete build plan for v0.1 (the first runnable version)
-4. **[`COMPATIBILITY-SPEC.md`](COMPATIBILITY-SPEC.md)** — contract for target repositories
-5. **[`schemas/skynet-config.schema.json`](schemas/skynet-config.schema.json)** — machine-checkable schema for `.skynet/config.yml`
+3. **[`docs/v0.1-plan.md`](docs/v0.1-plan.md)** — concrete build plan (~weekend-sized)
+4. **[`COMPATIBILITY-SPEC.md`](COMPATIBILITY-SPEC.md)** — what target repos must provide
 
 Templates:
 
-- **[`pipeline.example.toml`](pipeline.example.toml)** — per-host config template (copy to `~/.skynet/pipeline.local.toml`)
-- **[`.env.example`](.env.example)** — secrets template (copy to `~/.skynet/.env`)
+- **[`pipeline.example.toml`](pipeline.example.toml)** — per-host config template
+- **[`.env.example`](.env.example)** — secrets template
 
 ## What works today
 
-Nothing runs yet. v0.0a is the spec series — design only, no code. The runtime ships in v0.1.
+Nothing runs yet. v0.0a is the spec — design only, no code. The runtime ships in v0.1.
 
-## What v0.1 will deliver
+## Install (when v0.1 ships)
 
-An Operator on a Linux or Windows host can:
-
-- Install Skynet Agentry as a CLI tool (`uv tool install skynet-agentry`)
-- Onboard any compliant target repository (`skynet init --target <repo>`)
-- Configure per-role model assignments (Claude, GPT-5, Codex CLI subscription, local Llama, …) with fallback chains
-- Watch features ship end-to-end without manual intervention
-- Trust that no merge violated the configured path policies, no agent ran outside its workspace, and costs stayed within the daily cap
-
-See [`docs/v0.1-plan.md`](docs/v0.1-plan.md) for the full build plan, module structure, and acceptance criteria.
-
-## Two-repo model
-
-```
-Skynet Agentry (this repo)         Target repo
-the framework                       (e.g. rpi-home-monitor)
-─ orchestrator                  →   ─ .skynet/config.yml
-─ watchdog                          ─ docs/ai/
-─ agent runners                     ─ docs/ai/plans/   ← researcher writes
-─ skynet CLI                        ─ docs/ai/designs/ ← architect writes
-
-   installed once per host             cloned per task by orchestrator
+```bash
+uv tool install --from git+ssh://git@github.com/vinu-dev/skynet-agentry.git skynet-agentry
+skynet --version
+skynet service install                    # systemd or NSSM
 ```
 
-The framework is generic. Targets declare conformance to the [Compatibility Spec](COMPATIBILITY-SPEC.md) and provide a `.skynet/config.yml` describing their build/test commands, sensitive paths, and per-role model assignments. Target repos never copy framework source.
+Then configure a target repo with `.skynet/config.yml` + role rule files, and `skynet target add --repo <url>`.
 
 ## License
 
 MIT — see [LICENSE](LICENSE).
-
-## Status
-
-Private and pre-release. While the framework is private:
-
-```bash
-uv tool install --from git+ssh://git@github.com/vinu-dev/skynet-agentry.git skynet-agentry
-```
