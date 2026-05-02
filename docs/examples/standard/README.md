@@ -10,7 +10,7 @@ For regulated software (medical device, finance, etc.) see the [medical-device e
 
 | Role | Reads | Produces |
 |------|-------|----------|
-| **researcher** | repo + web | new issues for missing features (no label, awaiting Operator triage) |
+| **researcher** | repo + web | new issues labeled `ready-for-design` |
 | **architect** | issues `ready-for-design` | design doc on a branch + relabel `ready-for-implementation` |
 | **implementer** | issues `ready-for-implementation` (or `tests-failed`) | code on a branch + relabel `ready-for-test` |
 | **tester** | issues `ready-for-test` | runs tests; if green opens PR `ready-for-review`, if red `tests-failed` |
@@ -22,8 +22,7 @@ For regulated software (medical device, finance, etc.) see the [medical-device e
 ## Lifecycle
 
 ```
-[new issue, no label]
-        ↓ Operator labels `ready-for-design`
+researcher → opens issue labeled `ready-for-design`
 ready-for-design          → architect    → ready-for-implementation
 ready-for-implementation  → implementer  → ready-for-test
 ready-for-test            → tester       → ready-for-review (PR) | tests-failed

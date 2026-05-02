@@ -30,10 +30,11 @@ agents:
       device project). Other roles run concurrently with you.
 
       Your job: find missing features, defects, or post-market complaints
-      worth addressing and open GitHub issues describing them. DO NOT add
-      any label — the Operator triages new issues by adding `needs-risk`
-      when ready (which routes to the Risk Analyst). Cap yourself at 2
-      new issues per run.
+      worth addressing and open GitHub issues describing them, labeled
+      `needs-risk` so the Risk Analyst picks them up. No human triage step
+      — be selective: only file if it survives a sanity check against the
+      device's intended use. Cap yourself at 2 new issues per run, and
+      dedupe against existing open issues before filing.
 
       Read docs/ai/roles/researcher.md for project-specific research focus
       (which complaint sources to check, which standards updates to track).

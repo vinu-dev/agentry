@@ -35,7 +35,7 @@ Find issues labeled `ready-for-risk-analysis`. Process oldest first. If none, ex
 
 - Missing `docs/risk/risk-management-file.md` → label `blocked`, comment "Risk Management File not present in repo", exit 1.
 - Risk policy unclear or contradictory → label `blocked`, comment with specific contradictions, exit 1.
-- Issue lacks enough detail to identify hazards → comment requesting clarification, exit 0 (will retry next interval after Operator updates issue).
+- Issue lacks enough detail to identify hazards → label `blocked`, comment with the specific gaps, exit 0. The Researcher will pick it up on its next run and either rewrite or close it.
 
 ## References
 

@@ -78,7 +78,7 @@ Different projects need different roles. The framework supports any roster a tar
 
 | # | Role | Reads | Produces |
 |---|------|-------|----------|
-| 1 | **researcher** | repo + web | new issues for missing features (no label, awaiting Operator triage) |
+| 1 | **researcher** | repo + web | new issues labeled `ready-for-design` |
 | 2 | **architect** | issues `ready-for-design` | design doc + relabel `ready-for-implementation` |
 | 3 | **implementer** | issues `ready-for-implementation` (or `tests-failed`) | code on branch + relabel `ready-for-test` |
 | 4 | **tester** | issues `ready-for-test` | runs tests; if green opens PR `ready-for-review`, if red `tests-failed` |
@@ -91,7 +91,7 @@ A medical device repo conforming to IEC 62304 + ISO 13485 + ISO 14971 + FDA 21 C
 
 | # | Role | Reads | Produces |
 |---|------|-------|----------|
-| 7 | **risk_analyst** | new feature issues (no label) | risk analysis per ISO 14971; relabel `ready-for-design` after risk file updated |
+| 7 | **risk_analyst** | issues `needs-risk` (set by researcher) | risk analysis per ISO 14971; relabel `ready-for-design` after risk file updated |
 | 8 | **code_reviewer** | PRs after author opens (label `ready-for-code-review`) | functional review of the diff; relabel `ready-for-quality-review` |
 | 9 | **quality_reviewer** | PRs `ready-for-quality-review` | ISO 13485 / IEC 62304 conformance check; relabel `ready-for-cyber-review` |
 | 10 | **cybersecurity_reviewer** | PRs `ready-for-cyber-review` | IEC 81001-5-1 + FDA cyber guidance check; SBOM diff; threat modeling impact; relabel `ready-for-regulatory-review` |
@@ -105,9 +105,9 @@ The example in [`docs/examples/medical-device/`](examples/medical-device/) shows
 ### Lifecycle for the medical-device roster
 
 ```
-new issue (no label)
-        ↓ Operator labels `ready-for-risk-analysis`
-ready-for-risk-analysis      → risk_analyst writes risk file → ready-for-design
+researcher opens issue labeled `needs-risk`
+        ↓
+needs-risk                   → risk_analyst writes risk file → ready-for-design
 ready-for-design              → architect writes design doc → ready-for-implementation
 ready-for-implementation      → implementer codes → ready-for-test
 ready-for-test                → tester runs tests → ready-for-code-review (or tests-failed)

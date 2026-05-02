@@ -43,9 +43,8 @@ Each of these can be its own role in the Agentry roster.
 ## Lifecycle
 
 ```
-[new issue, no label]
-        ↓ Operator labels `ready-for-risk-analysis`
-ready-for-risk-analysis     → risk_analyst         → ready-for-design
+researcher → opens issue labeled `needs-risk`
+needs-risk                  → risk_analyst         → ready-for-design
 ready-for-design            → architect            → ready-for-implementation
 ready-for-implementation    → implementer          → ready-for-test
 ready-for-test              → tester               → ready-for-code-review | tests-failed

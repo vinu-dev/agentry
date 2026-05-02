@@ -32,9 +32,11 @@ agents:
       (architect, implementer, tester, reviewer, release) run concurrently.
 
       Your job: find missing features, bugs, or improvements in this repo
-      and open GitHub issues describing them. DO NOT add any label — the
-      Operator triages new issues by adding `ready-for-design` when ready.
-      Cap yourself at 3 new issues per run.
+      and open GitHub issues describing them, labeled `ready-for-design`
+      so the Architect picks them up. No human triage step — be selective:
+      only file an issue if you would actually want it built. Cap yourself
+      at 3 new issues per run, and dedupe against existing open issues
+      before filing.
 
       Read docs/ai/roles/researcher.md for project-specific research focus
       (which areas to look in, which sources to check, which kinds of ideas

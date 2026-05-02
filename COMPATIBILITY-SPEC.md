@@ -110,8 +110,7 @@ There's no single canonical lifecycle. The label progression is whatever the rul
 ### Standard 6-role lifecycle
 
 ```
-new issue (no label)
-        ↓ Operator labels `ready-for-design`
+Researcher → opens issue labeled `ready-for-design`
 ready-for-design       → Architect → ready-for-implementation
 ready-for-implementation → Implementer → ready-for-test
 ready-for-test         → Tester → ready-for-review (PR) | tests-failed
@@ -120,12 +119,14 @@ approved               → GitHub auto-merge
 merged
 ```
 
+Fully autonomous — no human triage. The Operator only intervenes for `blocked`
+PRs.
+
 ### Extended medical-device lifecycle (11 roles)
 
 ```
-new issue (no label)
-        ↓ Operator labels `ready-for-risk-analysis`
-ready-for-risk-analysis     → Risk Analyst → ready-for-design
+Researcher → opens issue labeled `needs-risk`
+needs-risk                  → Risk Analyst → ready-for-design
 ready-for-design            → Architect → ready-for-implementation
 ready-for-implementation    → Implementer → ready-for-test
 ready-for-test              → Tester → ready-for-code-review | tests-failed
@@ -348,8 +349,8 @@ There's no JSON Schema file, no PEP 440 ranges, no version handshake. The framew
 
 ## 12. Glossary
 
-- **Operator** — the human running Agentry. Triages new issues, vetos sensitive merges, handles `blocked` items.
-- **Target** — any repo with `.agentry/config.yml` + `docs/ai/roles/*.md` + the labels referenced by those rule files.
+- **Operator** — the human running Agentry. Does not do triage (the pipeline is fully autonomous); only intervenes for `blocked` PRs and decides when to stop the orchestrator.
+- **Target** — any repo with `agentry/config.yml` + `docs/ai/roles/*.md` + the labels referenced by those rule files.
 - **Role rule file** — `docs/ai/roles/<role>.md`. Repo-specific instructions for one agent role.
 - **Forever-loop** — the orchestrator's per-role thread that wakes the agent, waits, sleeps, repeats.
 - **Generic prompt** — the framework-synthesized prompt that wraps every role invocation, encoding the parallel-pipeline pattern. Same across all roles and projects.

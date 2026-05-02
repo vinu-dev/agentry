@@ -147,7 +147,7 @@ Agentry ships with **best-practice defaults** — a standard 6-role config and r
 ```bash
 agentry target add --repo git@github.com:vinu-dev/rpi-home-monitor.git
 # Agentry runs with defaults: claude/codex CLIs, sensible timeouts, standard 6 roles.
-# Operator triages new issues by labeling `ready-for-design`. Agents take it from there.
+# Researcher opens issues labeled `ready-for-design`. Pipeline runs end-to-end with no human input.
 ```
 
 That works for most hobby projects.
