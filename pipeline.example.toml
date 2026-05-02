@@ -1,0 +1,196 @@
+# Skynet Agentry — per-PC configuration template
+# =============================================================================
+#
+# Copy this file to `pipeline.local.toml` and edit for your machine.
+# `pipeline.local.toml` is gitignored. Per-machine settings (paths, COM ports,
+# smart-plug IPs) live there. This template is the committed reference.
+#
+# Per-target settings (build commands, test commands, sensitive paths, agent
+# models) live in each target repo's `.skynet/config.yml` — NOT here.
+#
+# This file controls how Skynet Agentry runs on YOUR computer.
+# `.skynet/config.yml` controls how Skynet Agentry operates on a TARGET REPO.
+
+# -----------------------------------------------------------------------------
+# Host paths
+# -----------------------------------------------------------------------------
+
+[host]
+
+# Base directory for per-task workspaces. Each task gets a fresh clone at:
+#   <workspace_root>/<task-id>/<target-name>/
+# Workspaces are deleted automatically after the task reaches a terminal state.
+workspace_root = "C:/Users/vinun/skynet/workspace"
+
+# Where the orchestrator keeps persistent state:
+#   <state_root>/skynet.db          sqlite — tasks, events, heartbeats, budget
+#   <state_root>/heartbeats/        live agent heartbeats (30s updates)
+#   <state_root>/logs/<task-id>/    per-task structured logs
+state_root = "C:/Users/vinun/skynet/state"
+
+# Path to the secrets file. Loaded once at orchestrator startup.
+# Never committed; see .env.example for the required variables.
+env_file = "C:/Users/vinun/.skynet/.env"
+
+# Where versioned prompts and policies live (read-only at agent runtime).
+# `uv tool install skynet-agentry` populates this directory.
+prompts_root = "C:/Users/vinun/.skynet/prompts"
+policies_root = "C:/Users/vinun/.skynet/policies"
+
+
+[host.wsl]
+
+# WSL distro name used by agents for Linux toolchain commands
+# (pytest, ruff, gh, ssh, bitbake, shellcheck).
+# Run `wsl -l -v` to see installed distros.
+distro = "Ubuntu-24.04"
+
+# Optional: sub-path inside WSL where target clones are mirrored for tools
+# that don't tolerate Windows paths well. Leave empty to skip mirroring.
+mirror_root = ""
+
+# -----------------------------------------------------------------------------
+# Targets
+# -----------------------------------------------------------------------------
+# List every target repo this orchestrator instance will operate on.
+# A target must already conform to the Compatibility Spec — run
+#   skynet doctor --target <remote>
+# before adding it here.
+
+[[targets.repos]]
+name = "rpi-home-monitor"
+remote = "git@github.com:vinu-dev/rpi-home-monitor.git"
+default_branch = "main"
+
+# Persistent clone (cache) used as the source for workspace creation.
+# Refreshed by `git fetch` before every task; faster than re-cloning.
+cache_path = "C:/Users/vinun/skynet/cache/rpi-home-monitor"
+
+# Optional: pause this target without removing it.
+enabled = true
+
+# Add more targets by repeating the [[targets.repos]] block.
+# Multi-target operation is supported in v0; concurrent_tasks budget applies
+# globally across all targets.
+
+# -----------------------------------------------------------------------------
+# LLM provider endpoints
+# -----------------------------------------------------------------------------
+# Override only if using a proxy or a self-hosted gateway.
+# API keys are NEVER stored here — they live in env_file.
+
+[providers.anthropic]
+base_url = "https://api.anthropic.com"
+# Env var holding the key (looked up in env_file)
+api_key_env = "ANTHROPIC_API_KEY"
+
+[providers.openai]
+base_url = "https://api.openai.com/v1"
+api_key_env = "OPENAI_API_KEY"
+
+[providers.codex_cli]
+# Path to the Codex CLI binary. `codex` if on PATH.
+binary_path = "codex"
+
+[providers.local]
+# Local model runtime (ollama, lm-studio, etc.). Optional.
+base_url = "http://localhost:11434"
+api_key_env = ""
+
+# -----------------------------------------------------------------------------
+# GitHub / Operator identity
+# -----------------------------------------------------------------------------
+
+[github]
+
+# The Operator's GitHub handle. Used for:
+#   - mention in escalation Discord notifications
+#   - validation against `gh auth status` at orchestrator startup
+operator_handle = "vinu-dev"
+
+# Whether to refuse startup if `gh auth` is logged in as a different account.
+strict_account_check = true
+
+# -----------------------------------------------------------------------------
+# Notification (Discord in v0)
+# -----------------------------------------------------------------------------
+
+[notification]
+
+# Channel and webhook env var name MUST match what each target's
+# `.skynet/config.yml` declares. The orchestrator routes per-target
+# notifications through the target's webhook; this section just records
+# host-level defaults for sanity-check messages on startup/shutdown.
+default_channel = "discord"
+default_webhook_env = "DISCORD_WEBHOOK_URL"
+
+# Batch flush window in seconds. Discord enforces a webhook rate limit of
+# ~30 messages/minute; batching prevents throttled silence.
+batch_flush_seconds = 60
+
+# -----------------------------------------------------------------------------
+# Hardware (deferred to v1+)
+# -----------------------------------------------------------------------------
+# In v0, hardware integration is disabled. Tester runs configured commands
+# only. The block below is reserved for v1+ — do not enable it on v0 builds.
+
+[hardware]
+enabled = false
+
+# Example v1+ rig (commented out — uncomment when migrating to v1):
+#
+# [[hardware.rigs]]
+# name = "rig-1"
+# # Server (Pi 4B)
+# server_serial = "COM3"          # USB-TTL adapter on Windows
+# server_ip = "192.168.1.50"
+# smart_plug_server = "kasa://192.168.1.100"
+# # Camera (Pi Zero 2W)
+# camera_serial = "COM4"
+# camera_ip = "192.168.1.51"
+# smart_plug_camera = "kasa://192.168.1.101"
+# # Recovery
+# bricked_recovery = "smart_plug_cycle"   # smart_plug_cycle | manual
+
+# -----------------------------------------------------------------------------
+# GCP VM (Yocto sstate-cache, optional)
+# -----------------------------------------------------------------------------
+# Skynet Agentry is local-first. The GCP VM is an optional offload for
+# Yocto builds, where cold cache builds are 2-4 hours. With sstate-cache
+# mirrored to a persistent VM disk, subsequent builds are minutes.
+#
+# enabled = false skips all GCP interaction; v0 default.
+
+[gcp_vm]
+enabled = false
+ssh_alias = "skynet-build-vm"
+sstate_cache_path = "/mnt/yocto/sstate-cache"
+downloads_path = "/mnt/yocto/downloads"
+
+# -----------------------------------------------------------------------------
+# Budget (host-wide caps, on top of per-target budgets)
+# -----------------------------------------------------------------------------
+# Per-target budgets are declared in each target's `.skynet/config.yml`.
+# This section adds a host-wide ceiling that further restricts spending
+# across all targets running on this PC.
+
+[budget]
+
+# Hard cap across ALL targets running on this host. The watchdog pauses
+# every agent (across every target) when this is hit, regardless of any
+# individual target's `daily_dollars` value.
+host_daily_dollars = 100
+
+# Hard cap on concurrent tasks across all targets.
+host_concurrent_tasks = 4
+
+# -----------------------------------------------------------------------------
+# Logging
+# -----------------------------------------------------------------------------
+
+[logging]
+
+level = "INFO"            # DEBUG | INFO | WARN | ERROR
+format = "json"           # json | text
+rotate_after_mb = 50
+keep_archives = 14        # rotated log files retained per agent
