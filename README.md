@@ -82,4 +82,16 @@ Then configure a target repo with `.skynet/config.yml` + role rule files, and `s
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+**AGPL-3.0** — see [LICENSE](LICENSE).
+
+This is intentional copyleft. If you fork Skynet Agentry, modify it, and run it
+as a service to others (including running it inside your company on private
+projects you don't open), you must release the source of your modified version
+under AGPL-3.0 as well.
+
+### Commercial license
+
+The AGPL terms are not friendly to closed-source commercial use. If you want
+to use Skynet Agentry inside a proprietary product or service without the
+AGPL obligations, a commercial license is available — contact
+[@vinu-dev](https://github.com/vinu-dev).
