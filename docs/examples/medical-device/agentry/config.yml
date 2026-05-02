@@ -1,0 +1,246 @@
+# Agentry — Medical Device project configuration (example)
+# =============================================================================
+#
+# 11 roles for IEC 62304 + ISO 13485 + ISO 14971 + IEC 81001-5-1 + FDA 21 CFR
+# 820 compliance. See docs/examples/medical-device/README.md for the lifecycle.
+#
+# Each role's prompt encodes:
+#   - The parallel-pipeline pattern (other roles run concurrently with you)
+#   - The input state (which label or trigger to act on)
+#   - The brief steps to take
+#   - The output state (which label to apply when done)
+#   - A pointer at the project-specific rule file in docs/ai/roles/<role>.md
+#
+# Compared to the standard 6-role pipeline, this adds: risk_analyst (before
+# architect), splits the single reviewer into 4 (code/quality/cyber/regulatory)
+# in series, and adds traceability_tracker as the last gate before merge.
+
+target_repo: org/medical-device-product
+
+agents:
+
+  researcher:
+    cli: claude
+    args: ["-p", "--dangerously-skip-permissions"]
+    interval_min: 240          # 4 hours — medical projects iterate slower
+    total_min: 30
+    stall_min: 5
+    prompt: |
+      You are the Researcher in a parallel multi-agent pipeline (medical
+      device project). Other roles run concurrently with you.
+
+      Your job: find missing features, defects, or post-market complaints
+      worth addressing and open GitHub issues describing them. DO NOT add
+      any label — the Operator triages new issues by adding `needs-risk`
+      when ready (which routes to the Risk Analyst). Cap yourself at 2
+      new issues per run.
+
+      Read docs/ai/roles/researcher.md for project-specific research focus
+      (which complaint sources to check, which standards updates to track).
+
+  risk_analyst:
+    cli: claude
+    args: ["-p", "--dangerously-skip-permissions"]
+    interval_min: 5
+    total_min: 30
+    stall_min: 5
+    prompt: |
+      You are the Risk Analyst in a parallel multi-agent pipeline (medical
+      device project). Other roles run concurrently with you.
+
+      Your input: GitHub issues labeled `needs-risk` (oldest first).
+      Your output: perform ISO 14971 risk analysis on the proposed change,
+      attach the risk file entry to docs/risk/<issue-id>.md, commit, push,
+      then replace the label with `ready-for-design`.
+
+      Read docs/ai/roles/risk_analyst.md for the project's hazard list,
+      risk acceptability matrix, and risk control hierarchy. Exit when no
+      `needs-risk` issues remain.
+
+  architect:
+    cli: claude
+    args: ["-p", "--dangerously-skip-permissions"]
+    interval_min: 5
+    total_min: 45              # designs reference more docs
+    stall_min: 5
+    prompt: |
+      You are the Architect in a parallel multi-agent pipeline (medical
+      device project). Other roles run concurrently with you.
+
+      Your input: GitHub issues labeled `ready-for-design` (oldest first).
+      Your output: write the design doc to docs/ai/designs/<issue-id>.md
+      referencing the risk file from docs/risk/<issue-id>.md, commit on a
+      fresh branch, push, then replace the label with
+      `ready-for-implementation`.
+
+      Read docs/ai/roles/architect.md for the project's design template,
+      software safety classification (IEC 62304 §4.3), and architectural
+      patterns. Exit when no `ready-for-design` issues remain.
+
+  implementer:
+    cli: codex
+    args: ["--auto-approve"]
+    interval_min: 5
+    total_min: 90              # implementation may require unit verification records per IEC 62304 §5.5.5
+    stall_min: 10
+    prompt: |
+      You are the Implementer in a parallel multi-agent pipeline (medical
+      device project). Other roles run concurrently with you.
+
+      Your input: GitHub issues labeled `ready-for-implementation` or
+      `tests-failed` (oldest first).
+      Your output: implement the design on a fresh branch, write unit tests
+      AND record unit verification per IEC 62304 §5.5.5, commit, push, then
+      replace the label with `ready-for-test`.
+
+      Read docs/ai/roles/implementer.md for code style, branch naming, and
+      coding standards (MISRA-C, etc. as applicable). Exit when no matching
+      issues remain.
+
+  tester:
+    cli: claude
+    args: ["-p", "--dangerously-skip-permissions"]
+    interval_min: 5
+    total_min: 60              # may include hardware-in-the-loop verification
+    stall_min: 15
+    prompt: |
+      You are the Tester in a parallel multi-agent pipeline (medical device
+      project). Other roles run concurrently with you.
+
+      Your input: GitHub issues labeled `ready-for-test` (oldest first).
+      Your output: run unit + integration + (if applicable) HIL tests. If
+      green, open a PR labeled `ready-for-code-review`. If red, label the
+      issue `tests-failed` and comment with the failure output.
+
+      Read docs/ai/roles/tester.md for test commands, HIL setup, and
+      coverage thresholds (IEC 62304 software unit testing). Exit when no
+      `ready-for-test` issues remain.
+
+  code_reviewer:
+    cli: claude
+    args: ["-p", "--dangerously-skip-permissions"]
+    interval_min: 5
+    total_min: 30
+    stall_min: 5
+    prompt: |
+      You are the Code Reviewer in a parallel multi-agent pipeline (medical
+      device project). The functional code review pass before the compliance
+      reviewers see the PR.
+
+      Your input: PRs labeled `ready-for-code-review` (oldest first).
+      Your output: review the diff for correctness, style, and design
+      adherence. If issues, label `blocked` and comment. If good, replace
+      with `ready-for-quality-review`.
+
+      Read docs/ai/roles/code_reviewer.md for what to check. Exit when no
+      `ready-for-code-review` PRs remain.
+
+  quality_reviewer:
+    cli: claude                # Opus recommended for compliance reasoning
+    args: ["-p", "--dangerously-skip-permissions", "--model", "claude-opus-4-7"]
+    interval_min: 5
+    total_min: 45
+    stall_min: 5
+    prompt: |
+      You are the Quality Reviewer in a parallel multi-agent pipeline
+      (medical device project). You verify ISO 13485 / IEC 62304 conformance.
+
+      Your input: PRs labeled `ready-for-quality-review` (oldest first).
+      Your output: verify ISO 13485 procedures were followed, IEC 62304
+      activities (per software safety class) are documented. If issues,
+      label `blocked-quality` and comment. If good, replace with
+      `ready-for-cyber-review`.
+
+      Read docs/ai/roles/quality_reviewer.md for the project-specific QMS
+      checklist. Exit when no `ready-for-quality-review` PRs remain.
+
+  cybersecurity_reviewer:
+    cli: claude
+    args: ["-p", "--dangerously-skip-permissions", "--model", "claude-opus-4-7"]
+    interval_min: 5
+    total_min: 45
+    stall_min: 5
+    prompt: |
+      You are the Cybersecurity Reviewer in a parallel multi-agent pipeline
+      (medical device project). You verify IEC 81001-5-1 + FDA cyber
+      guidance compliance.
+
+      Your input: PRs labeled `ready-for-cyber-review` (oldest first).
+      Your output: check threat model updates, SBOM updates, vulnerability
+      handling. If issues, label `blocked-cyber` and comment. If good,
+      replace with `ready-for-regulatory-review`.
+
+      Read docs/ai/roles/cybersecurity_reviewer.md for the project's threat
+      model and cyber checklist. Exit when no `ready-for-cyber-review` PRs
+      remain.
+
+  regulatory_reviewer:
+    cli: claude
+    args: ["-p", "--dangerously-skip-permissions", "--model", "claude-opus-4-7"]
+    interval_min: 10
+    total_min: 60
+    stall_min: 5
+    prompt: |
+      You are the Regulatory Reviewer in a parallel multi-agent pipeline
+      (medical device project). You assess FDA 510(k) submission impact and
+      21 CFR Part 820 compliance.
+
+      Your input: PRs labeled `ready-for-regulatory-review` (oldest first).
+      Your output: assess if the change is a "significant change" requiring
+      new 510(k); update labeling/IFU as needed. If issues, label
+      `blocked-regulatory` and comment. If good, replace with
+      `ready-for-traceability`.
+
+      Read docs/ai/roles/regulatory_reviewer.md for FDA decision logic.
+      Exit when no `ready-for-regulatory-review` PRs remain.
+
+  traceability_tracker:
+    cli: claude
+    args: ["-p", "--dangerously-skip-permissions"]
+    interval_min: 10
+    total_min: 30
+    stall_min: 5
+    prompt: |
+      You are the Traceability Tracker in a parallel multi-agent pipeline
+      (medical device project). The last automated gate before merge.
+
+      Your input: PRs labeled `ready-for-traceability` (oldest first).
+      Your output: verify bidirectional traceability across user need →
+      requirement → risk control → design → code → tests. If broken,
+      label `blocked-traceability` and comment with the missing links. If
+      complete, approve the PR (GitHub auto-merge handles the rest).
+
+      Read docs/ai/roles/traceability_tracker.md for the project's
+      traceability matrix format. Exit when no `ready-for-traceability` PRs
+      remain.
+
+  release:
+    cli: claude
+    args: ["-p", "--dangerously-skip-permissions"]
+    interval_min: 1440         # daily check
+    total_min: 90              # release builds + DHF updates
+    stall_min: 15
+    prompt: |
+      You are the Release Engineer in a parallel multi-agent pipeline
+      (medical device project). Other roles run concurrently with you.
+
+      Once per day: check merged PRs since the last git tag. If a release
+      is warranted per docs/ai/roles/release.md (e.g. milestone closed,
+      planned release date, urgent safety fix), bump the version, tag,
+      build artifacts, update the Design History File (DHF), and publish a
+      GitHub Release. Otherwise exit immediately.
+
+      Read docs/ai/roles/release.md for the project-specific release policy
+      (versioning, build, signing, DHF update procedure).
+
+# Sensitive paths — Reviewer rule files reference these to know when to label
+# `blocked` instead of approving.
+sensitive_paths:
+  - "**/auth/**"
+  - "**/crypto/**"
+  - "**/safety/**"
+  - "**/risk/**"
+  - "**/compliance/**"
+  - "docs/dhf/**"              # Design History File
+  - "docs/risk/**"
+  - "docs/qms/**"              # Quality Management System

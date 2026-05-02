@@ -1,30 +1,27 @@
-# Agentry — bundled standard 6-role default configuration
+# Agentry — standard 6-role configuration (example)
 # =============================================================================
 #
-# When a target repo doesn't ship its own agentry/config.yml, Agentry runs
-# with this file. It's also the file `scripts/add-to-target` writes into a
-# new target's agentry/ folder so the operator can edit it.
+# Suitable for hobby projects, internal tools, small teams.
 #
-# The `prompt:` field on each role is what the LLM CLI receives on stdin.
-# Each prompt encodes:
+# This is the same content as the bundled default that `add-to-target` writes
+# into a fresh target's agentry/ folder. Reproduced here for documentation
+# purposes — see scripts/add-to-target.{ps1,sh}.
+#
+# Each role's prompt encodes:
 #   - The parallel-pipeline pattern (other roles run concurrently with you)
 #   - The input state for this role (which label or trigger to act on)
 #   - The brief steps to take
 #   - The output state (which label to apply when done)
 #   - A pointer at the project-specific rule file in docs/ai/roles/<role>.md
-#
-# The rule files in docs/ai/roles/<role>.md (in the TARGET repo, not in
-# agentry/) hold the detailed instructions. Edit those for project-specific
-# behavior; this config.yml is for picking which model handles what.
 
-target_repo: <owner>/<repo>           # filled in by add-to-target per repo
+target_repo: <owner>/<repo>           # e.g. vinu-dev/rpi-home-monitor
 
 agents:
 
   researcher:
     cli: claude
     args: ["-p", "--dangerously-skip-permissions"]
-    interval_min: 60
+    interval_min: 60                  # hourly
     total_min: 30
     stall_min: 5
     prompt: |
@@ -60,7 +57,7 @@ agents:
       Exit when no `ready-for-design` issues remain.
 
   implementer:
-    cli: codex                # ← coding = codex by default; change to claude if you prefer
+    cli: codex                        # or claude — operator's choice
     args: ["--auto-approve"]
     interval_min: 5
     total_min: 60
@@ -84,7 +81,7 @@ agents:
     cli: claude
     args: ["-p", "--dangerously-skip-permissions"]
     interval_min: 5
-    total_min: 30
+    total_min: 30                     # raise to 60+ if rule file includes hardware steps
     stall_min: 10
     prompt: |
       You are the Tester in a parallel multi-agent pipeline. Other roles run
@@ -126,7 +123,7 @@ agents:
   release:
     cli: claude
     args: ["-p", "--dangerously-skip-permissions"]
-    interval_min: 1440
+    interval_min: 1440                # daily
     total_min: 60
     stall_min: 15
     prompt: |
@@ -142,8 +139,6 @@ agents:
       Read docs/ai/roles/release.md for the project-specific release policy
       (versioning rule, build commands, signing, changelog format).
 
-# Paths the Reviewer's rule file should treat as block-worthy.
-# Customize per your project — these are placeholders.
 sensitive_paths:
   - "**/auth/**"
   - "**/secrets/**"
