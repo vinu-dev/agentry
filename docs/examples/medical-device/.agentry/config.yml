@@ -4,9 +4,10 @@
 # 11 roles for IEC 62304 + ISO 13485 + ISO 14971 + IEC 81001-5-1 + FDA 21 CFR
 # 820 compliance. See docs/examples/medical-device/README.md for the lifecycle.
 #
-# Models: Opus is recommended for the heavy reviewer roles (quality, cyber,
-# regulatory, traceability) because they need long context and careful
-# reasoning. Sonnet is fine for routine roles.
+# Each role has a minimal prompt that mentions the parallel-pipeline context
+# and points the agent at its rule file. The actual review checklists,
+# applicable standards, and step-by-step procedures live in those rule files
+# under docs/ai/roles/<role>.md.
 
 target_repo: org/medical-device-product
 
@@ -18,6 +19,12 @@ agents:
     interval_min: 240          # 4 hours — medical projects iterate slower
     total_min: 30
     stall_min: 5
+    prompt: |
+      You are the Researcher in a parallel multi-agent pipeline (medical
+      device project). Other roles include risk_analyst, architect,
+      implementer, tester, code_reviewer, quality_reviewer,
+      cybersecurity_reviewer, regulatory_reviewer, traceability_tracker,
+      release. Read docs/ai/roles/researcher.md and follow it.
 
   risk_analyst:
     cli: claude
@@ -25,6 +32,10 @@ agents:
     interval_min: 5
     total_min: 30
     stall_min: 5
+    prompt: |
+      You are the Risk Analyst in a parallel multi-agent pipeline. You handle
+      ISO 14971 risk analysis on every new feature before it gets designed.
+      Read docs/ai/roles/risk_analyst.md and follow it.
 
   architect:
     cli: claude
@@ -32,6 +43,9 @@ agents:
     interval_min: 5
     total_min: 45              # designs reference more docs
     stall_min: 5
+    prompt: |
+      You are the Architect in a parallel multi-agent pipeline (medical
+      device project). Read docs/ai/roles/architect.md and follow it.
 
   implementer:
     cli: codex
@@ -39,6 +53,9 @@ agents:
     interval_min: 5
     total_min: 90              # implementation may require unit verification records per IEC 62304 §5.5.5
     stall_min: 10
+    prompt: |
+      You are the Implementer in a parallel multi-agent pipeline (medical
+      device project). Read docs/ai/roles/implementer.md and follow it.
 
   tester:
     cli: claude
@@ -46,6 +63,9 @@ agents:
     interval_min: 5
     total_min: 60              # may include hardware-in-the-loop verification
     stall_min: 15
+    prompt: |
+      You are the Tester in a parallel multi-agent pipeline (medical device
+      project). Read docs/ai/roles/tester.md and follow it.
 
   code_reviewer:
     cli: claude
@@ -53,13 +73,22 @@ agents:
     interval_min: 5
     total_min: 30
     stall_min: 5
+    prompt: |
+      You are the Code Reviewer in a parallel multi-agent pipeline (medical
+      device project). You handle the FUNCTIONAL code review pass before the
+      compliance reviewers (quality, cybersecurity, regulatory) get the PR.
+      Read docs/ai/roles/code_reviewer.md and follow it.
 
   quality_reviewer:
-    cli: claude                # Opus recommended via per-target setup
+    cli: claude                # Opus recommended for compliance reasoning
     args: ["-p", "--dangerously-skip-permissions", "--model", "claude-opus-4-7"]
     interval_min: 5
     total_min: 45
     stall_min: 5
+    prompt: |
+      You are the Quality Reviewer in a parallel multi-agent pipeline (medical
+      device project). You verify ISO 13485 / IEC 62304 conformance on every
+      PR. Read docs/ai/roles/quality_reviewer.md and follow it.
 
   cybersecurity_reviewer:
     cli: claude
@@ -67,6 +96,10 @@ agents:
     interval_min: 5
     total_min: 45
     stall_min: 5
+    prompt: |
+      You are the Cybersecurity Reviewer in a parallel multi-agent pipeline
+      (medical device project). You verify IEC 81001-5-1 + FDA cyber guidance
+      compliance. Read docs/ai/roles/cybersecurity_reviewer.md and follow it.
 
   regulatory_reviewer:
     cli: claude
@@ -74,6 +107,11 @@ agents:
     interval_min: 10
     total_min: 60
     stall_min: 5
+    prompt: |
+      You are the Regulatory Reviewer in a parallel multi-agent pipeline
+      (medical device project). You assess FDA 510(k) submission impact and
+      21 CFR Part 820 compliance. Read docs/ai/roles/regulatory_reviewer.md
+      and follow it.
 
   traceability_tracker:
     cli: claude
@@ -81,6 +119,12 @@ agents:
     interval_min: 10
     total_min: 30
     stall_min: 5
+    prompt: |
+      You are the Traceability Tracker in a parallel multi-agent pipeline
+      (medical device project). The last automated review before merge. You
+      verify bidirectional traceability across user need → requirement →
+      design → code → tests. Read docs/ai/roles/traceability_tracker.md and
+      follow it.
 
   release:
     cli: claude
@@ -88,6 +132,9 @@ agents:
     interval_min: 1440         # daily check
     total_min: 90              # release builds + DHF updates
     stall_min: 15
+    prompt: |
+      You are the Release Engineer in a parallel multi-agent pipeline
+      (medical device project). Read docs/ai/roles/release.md and follow it.
 
 # Sensitive paths — Reviewer rule files reference these to know when to label
 # `blocked` instead of approving.
