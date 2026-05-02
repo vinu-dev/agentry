@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/vinu-dev/skynet-agentry/schemas/skynet-config.schema.json",
   "title": "Skynet Agentry Target Configuration",
-  "description": "Schema for .skynet/config.yml in target repositories. Loaded and enforced by `skynet doctor` and by the orchestrator at task dispatch. Companion to COMPATIBILITY-SPEC.md.",
+  "description": "Schema for .skynet/config.yml in target repositories. Loaded and enforced by `skynet doctor` and the orchestrator. Companion to COMPATIBILITY-SPEC.md (v0.0a-2 revised).",
   "type": "object",
   "required": [
     "skynet_version",
@@ -20,11 +20,7 @@
       "type": "string",
       "description": "PEP 440 version specifier for the framework version range this target supports.",
       "minLength": 1,
-      "examples": [
-        ">=0.4,<1.0",
-        "==0.4.2",
-        ">=0.5"
-      ]
+      "examples": [">=0.4,<1.0", "==0.4.2", ">=0.5"]
     },
 
     "project": {
@@ -32,22 +28,44 @@
       "required": ["name", "languages"],
       "additionalProperties": false,
       "properties": {
-        "name": {
-          "type": "string",
-          "minLength": 1,
-          "description": "Short project name; used in agent prompts and PR bodies."
-        },
+        "name": { "type": "string", "minLength": 1 },
         "languages": {
           "type": "array",
           "items": { "type": "string" },
           "minItems": 1,
-          "uniqueItems": true,
-          "description": "Languages the project uses; informs which prompt-extras apply."
+          "uniqueItems": true
         },
-        "description": {
-          "type": "string",
-          "default": ""
-        }
+        "description": { "type": "string", "default": "" }
+      }
+    },
+
+    "providers": {
+      "type": "object",
+      "description": "Custom provider declarations. Built-in providers (anthropic, openai, codex_cli) require no declaration. Custom providers are referenced by their key throughout the config.",
+      "additionalProperties": { "$ref": "#/$defs/custom_provider" }
+    },
+
+    "defaults": {
+      "type": "object",
+      "description": "Defaults inherited by every role unless overridden per-role.",
+      "additionalProperties": false,
+      "properties": {
+        "primary": { "$ref": "#/$defs/model_ref" },
+        "fallbacks": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/model_ref" }
+        },
+        "prompt_extras": { "type": "string" },
+        "tool_allowlist": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "max_tokens_per_call": { "type": "integer", "minimum": 1000 },
+        "timeout_seconds": { "type": "integer", "minimum": 10 },
+        "max_retries": { "type": "integer", "minimum": 1, "maximum": 10 },
+        "on_rate_limit": { "$ref": "#/$defs/on_rate_limit" },
+        "on_capability_exceeded": { "$ref": "#/$defs/on_capability_exceeded" },
+        "on_stall": { "$ref": "#/$defs/on_stall" }
       }
     },
 
@@ -63,7 +81,7 @@
 
     "test": {
       "type": "object",
-      "description": "Test matrix. `unit` is the minimum required for any agent operation.",
+      "description": "Test matrix. `unit` is the minimum required.",
       "required": ["unit"],
       "additionalProperties": { "type": "string" },
       "properties": {
@@ -81,10 +99,7 @@
       "description": "Hardware test rigs. In v0, enabled MUST be false.",
       "additionalProperties": false,
       "properties": {
-        "enabled": {
-          "type": "boolean",
-          "default": false
-        },
+        "enabled": { "type": "boolean", "default": false },
         "rigs": {
           "type": "array",
           "items": { "$ref": "#/$defs/rig" },
@@ -103,11 +118,7 @@
           "enum": ["none", "github-release", "yocto-swu"],
           "default": "none"
         },
-        "trigger": {
-          "type": "string",
-          "description": "Examples: milestone, merge_count:5, cron:0 0 * * 0",
-          "default": "milestone"
-        },
+        "trigger": { "type": "string", "default": "milestone" },
         "artifact_glob": { "type": "string" },
         "signing_key_env": { "type": "string" }
       }
@@ -124,12 +135,10 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 168,
-          "default": 24,
-          "description": "Hold window for soft policy. Discord notification is emitted at hold start."
+          "default": 24
         },
         "path_policies": {
           "type": "object",
-          "description": "Glob → policy mapping. Longest-glob wins; combined across files with most-restrictive wins.",
           "patternProperties": {
             "^.+$": { "$ref": "#/$defs/policy" }
           },
@@ -140,7 +149,7 @@
 
     "agents": {
       "type": "object",
-      "description": "Agent roster. Implementer and Reviewer MUST resolve to different vendors (enforced semantically by `skynet doctor`, not by this schema).",
+      "description": "Agent roster. Implementer and Reviewer MUST resolve to different vendors (enforced semantically by skynet doctor). All seven roles are recognized; minimum required: researcher, architect, implementer, tester, pr_author, reviewer.",
       "required": [
         "researcher",
         "architect",
@@ -151,57 +160,19 @@
       ],
       "additionalProperties": false,
       "properties": {
-        "researcher": {
-          "type": "object",
-          "required": ["enabled"],
-          "additionalProperties": false,
-          "properties": {
-            "enabled": { "type": "boolean" },
-            "model": { "type": "string" },
-            "provider": { "$ref": "#/$defs/provider" },
-            "schedule": {
-              "type": "string",
-              "description": "Cron expression."
-            },
-            "max_per_day": {
-              "type": "integer",
-              "minimum": 1,
-              "default": 5,
-              "description": "Cap on issues created per day; counts toward budget boundary."
-            }
-          },
-          "if": { "properties": { "enabled": { "const": true } }, "required": ["enabled"] },
-          "then": { "required": ["model", "provider", "schedule"] }
-        },
-
-        "architect": { "$ref": "#/$defs/agent_simple" },
-        "implementer": { "$ref": "#/$defs/agent_simple" },
-        "tester": { "$ref": "#/$defs/agent_simple" },
-        "pr_author": { "$ref": "#/$defs/agent_simple" },
-        "reviewer": { "$ref": "#/$defs/agent_simple" },
-
-        "release": {
-          "type": "object",
-          "required": ["enabled"],
-          "additionalProperties": false,
-          "properties": {
-            "enabled": { "type": "boolean" },
-            "model": { "type": "string" },
-            "provider": { "$ref": "#/$defs/provider" },
-            "trigger": {
-              "type": "string",
-              "examples": ["milestone", "merge_count:5", "cron:0 0 * * 0"]
-            }
-          },
-          "if": { "properties": { "enabled": { "const": true } }, "required": ["enabled"] },
-          "then": { "required": ["model", "provider", "trigger"] }
-        }
+        "researcher": { "$ref": "#/$defs/agent_researcher" },
+        "architect": { "$ref": "#/$defs/agent_basic" },
+        "implementer": { "$ref": "#/$defs/agent_basic" },
+        "tester": { "$ref": "#/$defs/agent_basic" },
+        "pr_author": { "$ref": "#/$defs/agent_basic" },
+        "reviewer": { "$ref": "#/$defs/agent_basic" },
+        "release": { "$ref": "#/$defs/agent_release" }
       }
     },
 
     "budget": {
       "type": "object",
-      "description": "Cost / rate / concurrency caps. The fourth trust boundary.",
+      "description": "Budget boundary — daily spend, per-task tokens, retry cap, concurrency cap.",
       "required": [
         "daily_dollars",
         "per_task_tokens",
@@ -210,28 +181,10 @@
       ],
       "additionalProperties": false,
       "properties": {
-        "daily_dollars": {
-          "type": "number",
-          "exclusiveMinimum": 0,
-          "description": "Cumulative across all agents. Watchdog pauses all agents at 100%."
-        },
-        "per_task_tokens": {
-          "type": "integer",
-          "minimum": 1000
-        },
-        "retry_cap": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 10,
-          "default": 3,
-          "description": "Per-state retries. Exceeding moves task to quarantined."
-        },
-        "concurrent_tasks": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 10,
-          "default": 2
-        }
+        "daily_dollars": { "type": "number", "exclusiveMinimum": 0 },
+        "per_task_tokens": { "type": "integer", "minimum": 1000 },
+        "retry_cap": { "type": "integer", "minimum": 1, "maximum": 10, "default": 3 },
+        "concurrent_tasks": { "type": "integer", "minimum": 1, "maximum": 10, "default": 2 }
       }
     },
 
@@ -243,29 +196,19 @@
         "channel": {
           "type": "string",
           "enum": ["discord", "telegram", "email"],
-          "default": "discord",
-          "description": "v0 supports discord only. Others reserved for v1+."
+          "default": "discord"
         },
-        "webhook_env": {
-          "type": "string",
-          "minLength": 1,
-          "description": "Name of the env var in `~/.skynet/.env` holding the webhook URL or credential."
-        }
+        "webhook_env": { "type": "string", "minLength": 1 }
       }
     },
 
     "traceability": {
       "type": "object",
-      "description": "Optional. Required for the `full` compatibility level.",
+      "description": "Optional. Required for the full compatibility level.",
       "additionalProperties": false,
       "properties": {
-        "enabled": {
-          "type": "boolean",
-          "default": false
-        },
-        "check_command": {
-          "type": "string"
-        },
+        "enabled": { "type": "boolean", "default": false },
+        "check_command": { "type": "string" },
         "required_for_paths": {
           "type": "array",
           "items": { "type": "string" }
@@ -283,23 +226,172 @@
       "description": "hard = merge on green CI + Reviewer approval; soft = merge after hold_hours unless vetoed; none = never auto-merge."
     },
 
-    "provider": {
+    "on_rate_limit": {
       "type": "string",
-      "enum": ["anthropic", "openai", "codex_cli", "local"],
-      "description": "Model provider. `codex_cli` and `openai` are treated as the same vendor by the multi-vendor rule in `skynet doctor`."
+      "enum": ["backoff", "fallback", "backoff_then_fallback", "quarantine"],
+      "default": "backoff_then_fallback"
     },
 
-    "agent_simple": {
+    "on_capability_exceeded": {
+      "type": "string",
+      "enum": ["escalate", "fallback", "quarantine"],
+      "default": "escalate"
+    },
+
+    "on_stall": {
+      "type": "string",
+      "enum": ["kill_retry_quarantine", "quarantine"],
+      "default": "kill_retry_quarantine"
+    },
+
+    "model_ref": {
       "type": "object",
-      "required": ["enabled"],
+      "required": ["provider", "model"],
       "additionalProperties": false,
       "properties": {
-        "enabled": { "type": "boolean" },
-        "model": { "type": "string" },
-        "provider": { "$ref": "#/$defs/provider" }
+        "provider": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Either a built-in provider (anthropic, openai, codex_cli) or a key declared under top-level `providers:`."
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Model identifier as understood by the resolved provider."
+        }
+      }
+    },
+
+    "custom_provider": {
+      "type": "object",
+      "required": ["type"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "openai_compatible",
+            "anthropic_compatible",
+            "claude_cli",
+            "codex_cli"
+          ]
+        },
+        "base_url": {
+          "type": "string",
+          "format": "uri",
+          "description": "Required for openai_compatible / anthropic_compatible."
+        },
+        "api_key_env": {
+          "type": "string",
+          "description": "Env-var name (in .env) for the API key. Empty string = no key needed."
+        },
+        "binary_path": {
+          "type": "string",
+          "description": "For claude_cli / codex_cli: path to the binary, defaults to bare command name."
+        },
+        "vendor": {
+          "type": "string",
+          "enum": ["anthropic", "openai", "local", "operator-asserted"],
+          "default": "operator-asserted",
+          "description": "Vendor classification for the multi-vendor rule. claude_cli implies anthropic; codex_cli implies openai. For openai_compatible/anthropic_compatible custom endpoints, declare here so skynet doctor can enforce the rule."
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "type": { "enum": ["openai_compatible", "anthropic_compatible"] } } },
+          "then": { "required": ["type", "base_url"] }
+        }
+      ]
+    },
+
+    "agent_basic": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean", "default": true },
+        "primary": { "$ref": "#/$defs/model_ref" },
+        "fallbacks": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/model_ref" }
+        },
+        "prompt_extras": { "type": "string" },
+        "tool_allowlist": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "max_tokens_per_call": { "type": "integer", "minimum": 1000 },
+        "timeout_seconds": { "type": "integer", "minimum": 10 },
+        "max_retries": { "type": "integer", "minimum": 1, "maximum": 10 },
+        "on_rate_limit": { "$ref": "#/$defs/on_rate_limit" },
+        "on_capability_exceeded": { "$ref": "#/$defs/on_capability_exceeded" },
+        "on_stall": { "$ref": "#/$defs/on_stall" }
+      },
+      "description": "Empty {} is valid — the role inherits everything from defaults. Required fields are enforced after defaults are merged in (handled by skynet doctor)."
+    },
+
+    "agent_researcher": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean", "default": true },
+        "primary": { "$ref": "#/$defs/model_ref" },
+        "fallbacks": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/model_ref" }
+        },
+        "prompt_extras": { "type": "string" },
+        "tool_allowlist": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "max_tokens_per_call": { "type": "integer", "minimum": 1000 },
+        "timeout_seconds": { "type": "integer", "minimum": 10 },
+        "max_retries": { "type": "integer", "minimum": 1, "maximum": 10 },
+        "on_rate_limit": { "$ref": "#/$defs/on_rate_limit" },
+        "on_capability_exceeded": { "$ref": "#/$defs/on_capability_exceeded" },
+        "on_stall": { "$ref": "#/$defs/on_stall" },
+        "schedule": {
+          "type": "string",
+          "description": "Cron expression. Required when enabled."
+        },
+        "max_per_day": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 5
+        }
       },
       "if": { "properties": { "enabled": { "const": true } }, "required": ["enabled"] },
-      "then": { "required": ["model", "provider"] }
+      "then": { "required": ["schedule"] }
+    },
+
+    "agent_release": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean", "default": false },
+        "primary": { "$ref": "#/$defs/model_ref" },
+        "fallbacks": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/model_ref" }
+        },
+        "prompt_extras": { "type": "string" },
+        "tool_allowlist": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "max_tokens_per_call": { "type": "integer", "minimum": 1000 },
+        "timeout_seconds": { "type": "integer", "minimum": 10 },
+        "max_retries": { "type": "integer", "minimum": 1, "maximum": 10 },
+        "on_rate_limit": { "$ref": "#/$defs/on_rate_limit" },
+        "on_capability_exceeded": { "$ref": "#/$defs/on_capability_exceeded" },
+        "on_stall": { "$ref": "#/$defs/on_stall" },
+        "trigger": {
+          "type": "string",
+          "examples": ["milestone", "merge_count:5", "cron:0 0 * * 0"]
+        }
+      },
+      "if": { "properties": { "enabled": { "const": true } }, "required": ["enabled"] },
+      "then": { "required": ["trigger"] }
     },
 
     "rig": {
@@ -325,7 +417,7 @@
         },
         "serial": {
           "type": "string",
-          "description": "COM port (Windows) or device path (WSL/Linux)."
+          "description": "COM port (Windows) or device path (Linux/WSL)."
         },
         "smart_plug": {
           "type": "string",
