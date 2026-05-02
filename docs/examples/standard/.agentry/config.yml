@@ -1,0 +1,65 @@
+# Agentry — standard 6-role configuration (example)
+# =============================================================================
+#
+# Suitable for hobby projects, internal tools, small teams.
+#
+# Copy this file into your target repository at:
+#   <your-target-repo>/.agentry/config.yml
+#
+# Then edit `target_repo`, pick which CLI handles each role, and tune the
+# timeouts to your project. Each role also needs a corresponding rule file
+# at docs/ai/roles/<role>.md in your target repo — see the files in this
+# example directory for starting points.
+
+target_repo: <owner>/<repo>           # e.g. vinu-dev/rpi-home-monitor
+
+agents:
+
+  researcher:
+    cli: claude
+    args: ["-p", "--dangerously-skip-permissions"]
+    interval_min: 60                  # hourly
+    total_min: 30
+    stall_min: 5
+
+  architect:
+    cli: claude
+    args: ["-p", "--dangerously-skip-permissions"]
+    interval_min: 5
+    total_min: 30
+    stall_min: 5
+
+  implementer:
+    cli: codex                        # or claude — operator's choice
+    args: ["--auto-approve"]
+    interval_min: 5
+    total_min: 60
+    stall_min: 10
+
+  tester:
+    cli: claude
+    args: ["-p", "--dangerously-skip-permissions"]
+    interval_min: 5
+    total_min: 30                     # raise to 60+ if rule file includes hardware steps
+    stall_min: 10
+
+  reviewer:
+    cli: claude
+    args: ["-p", "--dangerously-skip-permissions"]
+    interval_min: 5
+    total_min: 20
+    stall_min: 5
+
+  release:
+    cli: claude
+    args: ["-p", "--dangerously-skip-permissions"]
+    interval_min: 1440                # daily
+    total_min: 60
+    stall_min: 15
+
+# Paths the Reviewer's rule file should treat as block-worthy.
+# Customize per your project — these are placeholders.
+sensitive_paths:
+  - "**/auth/**"
+  - "**/secrets/**"
+  - "**/.github/workflows/**"

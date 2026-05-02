@@ -8,25 +8,43 @@ Architecture: [`docs/architecture.md`](docs/architecture.md). Practical guide: [
 
 ---
 
-## 1. What a target repo must provide
+## 1. What a target repo provides
 
-Three things. That's it.
+The framework ships **best-practice defaults**. A target repo only provides files that override those defaults.
 
-### 1.1 `.agentry/config.yml`
+### 1.1 Defaults shipped with the framework
 
-Per-target agent declarations + timeouts. Declares which roles exist for this project and which CLI/timeouts each gets. **No prompt strings** — the framework supplies a generic prompt.
+| Default | Source (canonical, copy-pasteable) |
+|---------|-----------------------------------|
+| `.agentry/config.yml` (standard 6-role config) | [`docs/examples/standard/.agentry/config.yml`](docs/examples/standard/.agentry/config.yml) |
+| `docs/ai/roles/<role>.md` for each of the 6 standard roles | [`docs/examples/standard/docs/ai/roles/`](docs/examples/standard/docs/ai/roles/) |
+| GitHub labels for the 6-role lifecycle | created by `agentry doctor --init-labels` |
 
-### 1.2 `docs/ai/roles/<role>.md` for every declared role
+A target that provides nothing runs with the standard 6 roles, sensible CLI/timeout defaults, and the bundled rule files. **Most projects need to override at most one or two things** (which CLI handles each role, project-specific test commands, sensitive-path globs).
 
-One markdown file per role. The repo owner writes these. They are the actual project-specific instructions each agent follows.
+### 1.2 What a target overrides
 
-For a small project, that's typically 5-7 files. For a regulated medical device project, it's 10-12+. The framework runs identically either way.
+Files in the target repo take precedence over the bundled defaults, per file:
 
-### 1.3 GitHub labels referenced by the rule files
+- **`.agentry/config.yml`** in the target repo overrides the bundled config. Common reasons: pick different CLIs per role, change timeouts, add roles, declare sensitive paths.
+- **`docs/ai/roles/<role>.md`** in the target overrides the bundled rule file for that role. Common reasons: project-specific build/test commands, branch naming, sensitive-file rules, compliance references.
 
-The rule files specify which labels signal work for each role. The framework calls `agentry doctor --init-labels` to create them in the target repo if missing.
+A target that provides only `.agentry/config.yml` keeps the bundled rule files. A target that provides one custom role file keeps the bundled files for the other roles.
 
-For the standard 6-role hobby roster, the labels are:
+### 1.3 When you need a non-standard roster
+
+For projects that need roles beyond the standard 6 (e.g., a medical device project needing `quality_reviewer`, `cybersecurity_reviewer`, `regulatory_reviewer`, `traceability_tracker`), the target MUST provide:
+
+- `.agentry/config.yml` declaring all desired roles
+- `docs/ai/roles/<role>.md` for every role beyond the standard 6 (and any standard role you've replaced)
+
+See [`docs/examples/medical-device/`](docs/examples/medical-device/) for an 11-role worked example.
+
+### 1.4 GitHub labels
+
+Rule files specify which labels signal work for each role. `agentry doctor --init-labels` creates them in the target repo if missing.
+
+Standard 6-role labels:
 - `ready-for-design`
 - `ready-for-implementation`
 - `ready-for-test`
@@ -34,7 +52,7 @@ For the standard 6-role hobby roster, the labels are:
 - `ready-for-review`
 - `blocked`
 
-For an extended medical device roster, more labels exist (e.g., `ready-for-quality-review`, `ready-for-cyber-review`, `ready-for-regulatory-review`, `ready-for-traceability`). The set is whatever the repo's rule files reference.
+Extended rosters (medical device, etc.) introduce more labels (`ready-for-quality-review`, `ready-for-cyber-review`, etc.). The set is whatever the active rule files reference.
 
 ---
 

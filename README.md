@@ -36,13 +36,15 @@ Same framework, more threads. See [`docs/examples/medical-device/`](docs/example
 
 ## What target repos provide
 
-A repo is "Agentry-ready" when it has:
+**Nothing — by default.** Agentry ships with best-practice defaults: the standard 6-role config and bundled rule files. Point Agentry at your repo and it runs with those defaults out of the box.
+
+You only commit files in your target repo when you want to **override** a default:
 
 ```
-target-repo/
-├── .agentry/config.yml                ← agent assignments + timeouts
-└── docs/ai/roles/
-    ├── researcher.md                  ← project-specific instructions per role
+target-repo/   (only the files you want to customize)
+├── .agentry/config.yml                ← override CLIs / timeouts / roles (optional)
+└── docs/ai/roles/                     ← override per-role instructions (optional, per file)
+    ├── researcher.md
     ├── architect.md
     ├── implementer.md
     ├── tester.md
@@ -50,9 +52,13 @@ target-repo/
     └── release.md
 ```
 
-Plus 6 GitHub labels (`ready-for-design`, `ready-for-implementation`, `ready-for-test`, `tests-failed`, `ready-for-review`, `blocked`) — created by `agentry doctor --init-labels`.
+Most projects override one or two things (which CLI handles each role; project-specific test commands). The bundled defaults handle the rest.
 
-The framework prompts are generic ("read docs/ai/roles/X.md and follow it"). The actual work instructions live in the repo. Different repos can have different conventions.
+The canonical default config and rule files are at [`docs/examples/standard/`](docs/examples/standard/) — that's exactly what gets copied into your target if you run `agentry init`.
+
+GitHub labels are created automatically by `agentry doctor --init-labels`: `ready-for-design`, `ready-for-implementation`, `ready-for-test`, `tests-failed`, `ready-for-review`, `blocked`.
+
+The framework prompts are generic ("read `docs/ai/roles/X.md` and follow it"). The actual work instructions live in the bundled rule files (or your overrides if you have them).
 
 ## Read in this order
 

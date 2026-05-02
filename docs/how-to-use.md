@@ -131,7 +131,7 @@ agentry status
 
 ---
 
-## 3. Step 2-3 — Add Agentry to a target repo
+## 3. Step 2-3 — Point Agentry at a target repo
 
 ### Clone the target
 
@@ -140,23 +140,37 @@ git clone git@github.com:vinu-dev/rpi-home-monitor.git
 cd rpi-home-monitor
 ```
 
-### Run `agentry init`
+### Decide: defaults or custom?
+
+Agentry ships with **best-practice defaults** — a standard 6-role config and rule files. **You can run against your target without creating any Agentry files at all.** The framework uses the bundled defaults.
 
 ```bash
-agentry init                              # default: 6-role hobby roster
+agentry target add --repo git@github.com:vinu-dev/rpi-home-monitor.git
+# Agentry runs with defaults: claude/codex CLIs, sensible timeouts, standard 6 roles.
+# Operator triages new issues by labeling `ready-for-design`. Agents take it from there.
+```
+
+That works for most hobby projects.
+
+### When you DO want to customize
+
+Run `agentry init` to copy the defaults INTO your target repo as editable files:
+
+```bash
+agentry init                              # default: 6-role roster
 # or
 agentry init --template medical-device    # 11-role medical device roster
 ```
 
-This creates skeleton files in the current repo:
+This creates the file tree in the current repo:
 
 ```
 .agentry/
-└── config.yml                            ← agent declarations + timeouts
+└── config.yml                            ← edit this to pick CLIs / timeouts
 docs/
 └── ai/
     └── roles/
-        ├── researcher.md                 ← skeleton — "Replace with project-specific rules"
+        ├── researcher.md                 ← edit these to add project-specific rules
         ├── architect.md
         ├── implementer.md
         ├── tester.md
@@ -166,7 +180,9 @@ docs/
 
 For `--template medical-device`, you also get `risk_analyst.md`, `code_reviewer.md`, `quality_reviewer.md`, `cybersecurity_reviewer.md`, `regulatory_reviewer.md`, `traceability_tracker.md`.
 
-These are starting points — repo owner edits them.
+The files written by `agentry init` are exact copies of [`docs/examples/standard/`](https://github.com/vinu-dev/agentry/tree/main/docs/examples/standard) (or [`medical-device`](https://github.com/vinu-dev/agentry/tree/main/docs/examples/medical-device)) from the framework repo. Agentry uses your customized version once they're committed; if a file is missing in your target, Agentry falls back to the bundled default.
+
+**Practical result:** to run with defaults, do nothing. To customize ONE thing (e.g., switch implementer to Codex), commit just `.agentry/config.yml` with that one role's `cli` field changed; everything else still uses defaults.
 
 ---
 
