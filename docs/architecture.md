@@ -2,8 +2,6 @@
 
 Status: **v0.0a-final (pre-implementation)**
 
-This is the lean version. Earlier drafts overengineered. The actual system is small.
-
 ---
 
 ## 1. What it is
@@ -72,9 +70,9 @@ This is where the project's flavor lives. A hobby project's `architect.md` is on
 
 ---
 
-## 3. Roles are extensible (not fixed at 6)
+## 3. Roles are extensible
 
-Earlier drafts of this doc baked in 6 roles (Researcher, Architect, Implementer, Tester, Reviewer, Release). That was wrong — different projects need different roles. The framework supports any roster.
+Different projects need different roles. The framework supports any roster a target repo declares.
 
 ### Common starter roster (rpi-home-monitor and most projects)
 
@@ -371,14 +369,17 @@ What ships:
 Not in v0.1 (deferred):
 
 - Babysitter LLM (v0.2+) — reads agent stdout, decides "still working / kill / send 'continue'"
-- Hardware test integration (v1+)
+- Telegram / email notifiers (v0.2+) — Discord-only for v0.1
+- Multi-target parallelism (v1+) — concurrent dispatch across multiple target repos
 - Anything else not on this page
+
+Hardware integration is **not** deferred — see §9. Any role whose rule file includes hardware steps works today using the agent's built-in shell tools.
 
 When v0.1 ships and a target's role files are written, the system runs.
 
 ---
 
-## 10. The mental model
+## 11. The mental model
 
 > Skynet Agentry is a contractor's PM running N alarm clocks. Every interval, an alarm goes off and a worker (LLM CLI) wakes up, reads the repo's instructions for its role, does the work, exits. If a worker doesn't come back on time, the PM kills it and lets the next alarm wake a fresh one. The PM has no memory beyond the alarm schedule and a one-paragraph generic prompt. Everything else is in the repo or in GitHub. Number of alarms is whatever the repo declares — 6 for a hobby project, 11 for a medical device.
 
