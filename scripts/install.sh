@@ -316,12 +316,14 @@ ${C_CYAN}Next steps (you must do these — they need your browser / credentials)
          claude login            # uses your Anthropic Pro/Max subscription
          codex login             # uses your ChatGPT subscription
 
-  2. Fill in $ENV_FILE with your actual values:
+  2. Fill in $ENV_FILE. The ONLY required value is GITHUB_TOKEN:
 
          GITHUB_TOKEN=ghp_...                    # github.com/settings/tokens
-         DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
-         ANTHROPIC_API_KEY=sk-ant-...            # optional API fallback
-         OPENAI_API_KEY=sk-...                   # optional API fallback
+
+     Everything else is optional:
+       - DISCORD_WEBHOOK_URL — push notifications (skip if you'll just read logs)
+       - ANTHROPIC_API_KEY / OPENAI_API_KEY — API fallback when subs rate-limit
+       - other variables are referenced only by specific role rule files
 
   3. Run agentry against a target repo:
 

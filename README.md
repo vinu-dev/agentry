@@ -97,12 +97,12 @@ The installer is idempotent and installs everything Agentry needs:
 - `agentry` itself (via `pipx` on Linux, `pip --user` on Windows)
 - `claude` (Claude Code) and `codex` (OpenAI Codex CLI) via npm
 - NSSM on Windows (only needed if you'll use `agentry service install`)
-- `~/.agentry/` directory with template `.env` and `pipeline.local.toml`
+- Your Agentry data folder (`%USERPROFILE%\Agentry\` on Windows, `~/.agentry/` on Linux) with template `.env` and `pipeline.local.toml`
 
 The installer does **not** do anything that requires your credentials:
 
 - It does not run `claude login` / `codex login` (those open your browser)
-- It does not fill in API keys / Discord webhook / GitHub PAT in your `.env`
+- It does not fill in API keys / GitHub PAT in your `.env`
 
 Those steps are listed at the end of the install run.
 
@@ -112,10 +112,10 @@ Those steps are listed at the end of the install run.
 claude login                                  # opens browser, links your subscription
 codex login                                   # same for ChatGPT
 
-# Fill in your secrets:
+# Fill in your one required secret:
 #   Windows: %USERPROFILE%\Agentry\.env
 #   Linux:   ~/.agentry/.env
-$EDITOR <agentry-dir>/.env                    # fill in GITHUB_TOKEN + DISCORD_WEBHOOK_URL
+$EDITOR <agentry-dir>/.env                    # GITHUB_TOKEN — that's the only required field
 
 cd <your-target-repo>
 agentry doctor --init-labels                  # creates the 6 GitHub labels in the target
@@ -124,7 +124,20 @@ agentry start                                  # foreground (Ctrl-C to stop)
 agentry service install                       # always-on (systemd / NSSM)
 ```
 
+That's it. Notifications, API-key fallbacks, and provider-specific env vars are all optional — see the comments in your `.env` template if you want to enable any of them.
+
 Then configure the target with `.agentry/config.yml` + role rule files (or use the bundled defaults), and `agentry target add --repo <url>` if running with the service.
+
+### Watching what it does
+
+Every role's stdout is logged per-run under your Agentry data folder:
+
+```
+Windows: %USERPROFILE%\Agentry\logs\<role>\<timestamp>.log
+Linux:   ~/.agentry/logs/<role>/<timestamp>.log
+```
+
+That's the default — no external service required. If you want push notifications when an agent stalls or finishes, configure one of the optional channels in `.env` (Discord webhook today; Telegram + email in v0.2+).
 
 ## Where Agentry stores your data
 
