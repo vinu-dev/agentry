@@ -1,4 +1,4 @@
-# Skynet Agentry — How to Use
+# Agentry — How to Use
 
 Status: **draft, pre-implementation**
 
@@ -9,30 +9,30 @@ The Operator's quick guide. Five-step flow to get a target repo running autonomo
 ## TL;DR — the five steps
 
 ```bash
-# 1. Install Skynet Agentry once on this host
-uv tool install --from git+ssh://git@github.com/vinu-dev/skynet-agentry.git skynet-agentry
-skynet service install                   # registers systemd / NSSM service
+# 1. Install Agentry once on this host
+uv tool install --from git+ssh://git@github.com/vinu-dev/agentry.git agentry
+agentry service install                   # registers systemd / NSSM service
 
 # 2. Get the target repo
 git clone git@github.com:vinu-dev/rpi-home-monitor.git
 cd rpi-home-monitor
 
-# 3. Add Skynet to it (gtest-style: declare it, don't copy it)
-skynet init                              # creates .skynet/config.yml + docs/ai/roles/*.md skeletons
+# 3. Add Agentry to it (gtest-style: declare it, don't copy it)
+agentry init                              # creates .agentry/config.yml + docs/ai/roles/*.md skeletons
 
 # 4. Edit which model handles each role + write what each role does
-$EDITOR .skynet/config.yml               # set `cli` per role (claude, codex, etc.)
+$EDITOR .agentry/config.yml               # set `cli` per role (claude, codex, etc.)
 $EDITOR docs/ai/roles/architect.md       # write project-specific instructions per role
 # ... same for the other roles
 
 # 5. Start the show
-git commit -am "Add Skynet Agentry config and role rules"
+git commit -am "Add Agentry config and role rules"
 git push
-skynet target add --repo git@github.com:vinu-dev/rpi-home-monitor.git
-skynet status                            # all role threads running
+agentry target add --repo git@github.com:vinu-dev/rpi-home-monitor.git
+agentry status                            # all role threads running
 ```
 
-`skynet start` auto-detects which CLIs are installed (looks them up on PATH) and runs them with the args you configured. Discord pings as work flows through.
+`agentry start` auto-detects which CLIs are installed (looks them up on PATH) and runs them with the args you configured. Discord pings as work flows through.
 
 ---
 
@@ -41,7 +41,7 @@ skynet status                            # all role threads running
 - A host that runs 24/7: Ubuntu 22.04+ (recommended) or Windows 11
 - Python 3.11+
 - `uv` (`curl -LsSf https://astral.sh/uv/install.sh | sh`)
-- `gh` CLI (for `skynet init` and label management)
+- `gh` CLI (for `agentry init` and label management)
 - At least one LLM CLI installed: `claude` (Claude Code) and/or `codex` (Codex CLI), and/or a wrapper script for a local model
 - A Discord server where you can post webhooks
 
@@ -53,27 +53,27 @@ Optional, role-dependent:
 
 ---
 
-## 2. Step 1 — Install Skynet Agentry on the host
+## 2. Step 1 — Install Agentry on the host
 
 ### Linux
 
 ```bash
-uv tool install --from git+ssh://git@github.com/vinu-dev/skynet-agentry.git skynet-agentry
-skynet --version
-mkdir -p ~/.skynet/state
+uv tool install --from git+ssh://git@github.com/vinu-dev/agentry.git agentry
+agentry --version
+mkdir -p ~/.agentry/state
 ```
 
 ### Windows
 
 ```powershell
-uv tool install --from git+ssh://git@github.com/vinu-dev/skynet-agentry.git skynet-agentry
-skynet --version
-New-Item -ItemType Directory -Path "$env:USERPROFILE\.skynet\state" -Force
+uv tool install --from git+ssh://git@github.com/vinu-dev/agentry.git agentry
+agentry --version
+New-Item -ItemType Directory -Path "$env:USERPROFILE\.agentry\state" -Force
 ```
 
 ### Set up secrets and host config
 
-`~/.skynet/.env`:
+`~/.agentry/.env`:
 
 ```
 ANTHROPIC_API_KEY=sk-ant-...                      # if using Anthropic API
@@ -84,11 +84,11 @@ DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
 
 GitHub PAT scopes: `contents` (read+write), `issues` (read+write), `pull_requests` (read+write), `metadata` (read).
 
-`~/.skynet/pipeline.local.toml`:
+`~/.agentry/pipeline.local.toml`:
 
 ```toml
 [host]
-state_dir = "~/.skynet/state"
+state_dir = "~/.agentry/state"
 
 [github]
 token_env = "GITHUB_TOKEN"
@@ -116,14 +116,14 @@ These store OAuth credentials locally that the spawned subprocesses inherit.
 ### Install services
 
 ```bash
-skynet service install
+agentry service install
 ```
 
-On Linux: writes systemd unit at `~/.config/systemd/user/skynet.service` and enables it.
+On Linux: writes systemd unit at `~/.config/systemd/user/agentry.service` and enables it.
 On Windows: creates an NSSM service running as your user (so OAuth creds for `claude login` / `codex login` are reachable).
 
 ```bash
-skynet status
+agentry status
 
 # orchestrator: running (pid 12345, 0 targets, 0 role threads)
 # notifications: ok
@@ -131,7 +131,7 @@ skynet status
 
 ---
 
-## 3. Step 2-3 — Add Skynet to a target repo
+## 3. Step 2-3 — Add Agentry to a target repo
 
 ### Clone the target
 
@@ -140,18 +140,18 @@ git clone git@github.com:vinu-dev/rpi-home-monitor.git
 cd rpi-home-monitor
 ```
 
-### Run `skynet init`
+### Run `agentry init`
 
 ```bash
-skynet init                              # default: 6-role hobby roster
+agentry init                              # default: 6-role hobby roster
 # or
-skynet init --template medical-device    # 11-role medical device roster
+agentry init --template medical-device    # 11-role medical device roster
 ```
 
 This creates skeleton files in the current repo:
 
 ```
-.skynet/
+.agentry/
 └── config.yml                            ← agent declarations + timeouts
 docs/
 └── ai/
@@ -174,7 +174,7 @@ These are starting points — repo owner edits them.
 
 ### Pick which model handles each role
 
-Edit `.skynet/config.yml`. Default uses `claude` everywhere. Adjust per your setup:
+Edit `.agentry/config.yml`. Default uses `claude` everywhere. Adjust per your setup:
 
 ```yaml
 target_repo: vinu-dev/rpi-home-monitor
@@ -268,7 +268,7 @@ Find issues labeled `ready-for-design` (oldest first). If none, exit immediately
    - Architecture impact
    - Risks (cross-reference risk register)
    - Test plan
-5. Commit on a fresh branch `skynet/<id>/design-<slug>`
+5. Commit on a fresh branch `agentry/<id>/design-<slug>`
 6. Push the branch
 7. Open a PR titled `[design] <issue title>` linking the issue
 8. On the issue: replace label `ready-for-design` with `ready-for-implementation`
@@ -302,17 +302,17 @@ See [`docs/examples/medical-device/`](examples/medical-device/) for full example
 ## 5. Step 5 — Start
 
 ```bash
-git commit -am "Add Skynet Agentry config and role rules"
+git commit -am "Add Agentry config and role rules"
 git push
 
-skynet doctor --target git@github.com:vinu-dev/rpi-home-monitor.git --init-labels
+agentry doctor --target git@github.com:vinu-dev/rpi-home-monitor.git --init-labels
 # Creates the labels referenced by your rule files
 # Validates: config valid, all role files present, all CLIs on PATH
 
-skynet target add --repo git@github.com:vinu-dev/rpi-home-monitor.git
+agentry target add --repo git@github.com:vinu-dev/rpi-home-monitor.git
 # Orchestrator now spawns one thread per declared role
 
-skynet status
+agentry status
 
 # orchestrator: running (pid 12345, 1 target, 6 role threads)
 #   role threads:
@@ -335,34 +335,34 @@ You're done with setup. The system runs.
 Discord pings as roles wake up:
 
 ```
-[Skynet] researcher: started
-[Skynet] researcher: opened issue #173 "Add audio recording"
-[Skynet] researcher: exited 0 (took 4m12s)
-[Skynet] architect: started, no work, exited 0
-[Skynet] architect: started for #173
-[Skynet] architect: design doc committed for #173, label flipped
-[Skynet] implementer: started for #173
-[Skynet] tester: tests-failed for #173, label flipped
-[Skynet] implementer: started for #173 (retry 1)
-[Skynet] tester: green, PR #88 opened, label `ready-for-review`
-[Skynet] reviewer: approved PR #88
+[Agentry] researcher: started
+[Agentry] researcher: opened issue #173 "Add audio recording"
+[Agentry] researcher: exited 0 (took 4m12s)
+[Agentry] architect: started, no work, exited 0
+[Agentry] architect: started for #173
+[Agentry] architect: design doc committed for #173, label flipped
+[Agentry] implementer: started for #173
+[Agentry] tester: tests-failed for #173, label flipped
+[Agentry] implementer: started for #173 (retry 1)
+[Agentry] tester: green, PR #88 opened, label `ready-for-review`
+[Agentry] reviewer: approved PR #88
 [GitHub] PR #88 merged
 ```
 
 ### Operator commands
 
 ```bash
-skynet status                       # what's running, what's stuck
-skynet logs                         # tail orchestrator log
-skynet logs --role implementer      # tail one role's stdout
+agentry status                       # what's running, what's stuck
+agentry logs                         # tail orchestrator log
+agentry logs --role implementer      # tail one role's stdout
 
-skynet pause --role implementer     # stop spawning this role until resume
-skynet resume --role implementer
+agentry pause --role implementer     # stop spawning this role until resume
+agentry resume --role implementer
 
-skynet pause                        # stop all roles
-skynet resume
+agentry pause                        # stop all roles
+agentry resume
 
-skynet kick --role <role>           # force-kill current subprocess; next interval starts fresh
+agentry kick --role <role>           # force-kill current subprocess; next interval starts fresh
 ```
 
 ### Triaging research drafts
@@ -370,7 +370,7 @@ skynet kick --role <role>           # force-kill current subprocess; next interv
 The Researcher opens issues with no label. You decide which to act on:
 
 - **Worth doing now:** add the label your project uses for "next stage" (e.g., `ready-for-design` or `ready-for-risk-analysis` for medical projects). The next role picks up within 5 min.
-- **Maybe later:** add a custom label like `backlog`. Skynet ignores it.
+- **Maybe later:** add a custom label like `backlog`. Agentry ignores it.
 - **Not worth it:** close the issue.
 
 This is the only manual step in routine operation.
@@ -378,14 +378,14 @@ This is the only manual step in routine operation.
 ### Vetoing or unsticking
 
 - A PR has `blocked` — Reviewer (or another reviewer role for medical) flagged it. Decide manually.
-- A role keeps stalling — check `skynet logs --role <name>`. Likely the rule file is unclear or the CLI is hitting an environment issue.
-- An agent is misbehaving — `skynet pause --role <name>`, fix the rule file, `skynet resume`.
+- A role keeps stalling — check `agentry logs --role <name>`. Likely the rule file is unclear or the CLI is hitting an environment issue.
+- An agent is misbehaving — `agentry pause --role <name>`, fix the rule file, `agentry resume`.
 
 ---
 
 ## 7. Adding more roles for specialized projects
 
-For projects with extra compliance, security, or quality concerns, declare additional roles in `.skynet/config.yml` and write their rule files in `docs/ai/roles/`. The framework spawns one thread per declared role automatically.
+For projects with extra compliance, security, or quality concerns, declare additional roles in `.agentry/config.yml` and write their rule files in `docs/ai/roles/`. The framework spawns one thread per declared role automatically.
 
 ### Medical device example (11 roles)
 
@@ -464,11 +464,11 @@ If the diff touches `app/camera/` or `meta-home-monitor/`, run hardware smoke:
 ### Orchestrator won't start
 
 ```bash
-journalctl --user -u skynet -e             # Linux
+journalctl --user -u agentry -e             # Linux
 # Windows: Event Viewer → Application logs
 ```
 
-Common: `.env` missing, `skynet doctor` failing for a target, port conflict on IPC socket.
+Common: `.env` missing, `agentry doctor` failing for a target, port conflict on IPC socket.
 
 ### A role's CLI not found
 
@@ -477,7 +477,7 @@ Error: agent 'implementer' uses cli 'codex' which is not on PATH
 Install: npm install -g @openai/codex
 ```
 
-`skynet doctor` checks every CLI before spawning. Install missing CLIs and re-run.
+`agentry doctor` checks every CLI before spawning. Install missing CLIs and re-run.
 
 ### Role exits non-zero immediately
 
@@ -494,16 +494,16 @@ Create or edit the rule file in the target repo.
 If `claude` CLI reports "not authenticated" despite `claude login` working interactively:
 
 ```powershell
-nssm set skynet ObjectName .\<your-username> <your-password>
-sc stop skynet && sc start skynet
+nssm set agentry ObjectName .\<your-username> <your-password>
+sc stop agentry && sc start agentry
 ```
 
-`skynet service install` does this automatically; only relevant for debugging.
+`agentry service install` does this automatically; only relevant for debugging.
 
 ### Discord notifications not arriving
 
 ```bash
-skynet notify test
+agentry notify test
 ```
 
 If that fails, check `DISCORD_WEBHOOK_URL` in `.env`. Webhook URLs expire if the channel is deleted.

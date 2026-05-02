@@ -19,7 +19,7 @@ Find issues labeled `ready-for-risk-analysis`. Process oldest first. If none, ex
 5. If new hazards are identified, add entries to `docs/risk/risk-management-file.md` following the project's risk-entry format.
 6. If existing risk controls are sufficient, document this and the rationale.
 7. If new risk controls are required, list them in the issue body under a `## Required Risk Controls` heading. The Architect must include these as design requirements.
-8. Commit changes to a branch `skynet/<id>/risk-<slug>`.
+8. Commit changes to a branch `agentry/<id>/risk-<slug>`.
 9. Push and open a PR titled `[risk] <issue title>`.
 10. On the original issue: replace label `ready-for-risk-analysis` with `ready-for-design`.
 11. Exit with code 0.

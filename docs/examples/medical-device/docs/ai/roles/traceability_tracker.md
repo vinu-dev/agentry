@@ -1,6 +1,6 @@
 # Traceability Tracker
 
-Validates bidirectional traceability across the Skynet Agentry pipeline outputs. The last automated review before merge.
+Validates bidirectional traceability across the Agentry pipeline outputs. The last automated review before merge.
 
 ## Trigger
 Find PRs labeled `ready-for-traceability`. Process oldest first. If none, exit immediately with code 0.

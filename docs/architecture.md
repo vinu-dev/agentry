@@ -1,4 +1,4 @@
-# Skynet Agentry — Architecture
+# Agentry — Architecture
 
 Status: **v0.0a-final (pre-implementation)**
 
@@ -6,7 +6,7 @@ Status: **v0.0a-final (pre-implementation)**
 
 ## 1. What it is
 
-Skynet Agentry is a small Python daemon that runs **N forever-loops in parallel**, one per role declared by the target repo. Each loop spawns an LLM CLI subprocess (Claude Code, Codex CLI, etc.) at its own interval. The subprocess receives a generic prompt from the framework (which encodes the parallel-pipeline pattern) plus a pointer to the repo's `docs/ai/roles/<role>.md` rule file (which encodes the project-specific work). It does the work, exits. The daemon supervises: timeouts, restarts, Discord pings.
+Agentry is a small Python daemon that runs **N forever-loops in parallel**, one per role declared by the target repo. Each loop spawns an LLM CLI subprocess (Claude Code, Codex CLI, etc.) at its own interval. The subprocess receives a generic prompt from the framework (which encodes the parallel-pipeline pattern) plus a pointer to the repo's `docs/ai/roles/<role>.md` rule file (which encodes the project-specific work). It does the work, exits. The daemon supervises: timeouts, restarts, Discord pings.
 
 That's the whole product. ~200 lines of Python.
 
@@ -127,7 +127,7 @@ merged
 
 ## 4. Configuration
 
-### `.skynet/config.yml` in the target repo
+### `.agentry/config.yml` in the target repo
 
 ```yaml
 target_repo: vinu-dev/rpi-home-monitor
@@ -363,7 +363,7 @@ What ships:
 - Generic prompt template (framework-provided)
 - Discord notifier
 - systemd unit + NSSM XML generators
-- Tiny CLI: `skynet start / stop / status / doctor / target add`
+- Tiny CLI: `agentry start / stop / status / doctor / target add`
 - The medical device example as documentation
 
 Not in v0.1 (deferred):
@@ -381,6 +381,6 @@ When v0.1 ships and a target's role files are written, the system runs.
 
 ## 11. The mental model
 
-> Skynet Agentry is a contractor's PM running N alarm clocks. Every interval, an alarm goes off and a worker (LLM CLI) wakes up, reads the repo's instructions for its role, does the work, exits. If a worker doesn't come back on time, the PM kills it and lets the next alarm wake a fresh one. The PM has no memory beyond the alarm schedule and a one-paragraph generic prompt. Everything else is in the repo or in GitHub. Number of alarms is whatever the repo declares — 6 for a hobby project, 11 for a medical device.
+> Agentry is a contractor's PM running N alarm clocks. Every interval, an alarm goes off and a worker (LLM CLI) wakes up, reads the repo's instructions for its role, does the work, exits. If a worker doesn't come back on time, the PM kills it and lets the next alarm wake a fresh one. The PM has no memory beyond the alarm schedule and a one-paragraph generic prompt. Everything else is in the repo or in GitHub. Number of alarms is whatever the repo declares — 6 for a hobby project, 11 for a medical device.
 
 That's it.

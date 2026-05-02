@@ -1,8 +1,8 @@
-# Medical Device Example — Skynet Agentry roster
+# Medical Device Example — Agentry roster
 
-This example shows how a target repository for medical device software can declare an extended Skynet Agentry roster with specialized review roles for regulatory compliance.
+This example shows how a target repository for medical device software can declare an extended Agentry roster with specialized review roles for regulatory compliance.
 
-The example is **documentation only** — these files describe what a medical device repo's `.skynet/config.yml` and `docs/ai/roles/*.md` would look like. Copy and adapt to your actual medical device project.
+The example is **documentation only** — these files describe what a medical device repo's `.agentry/config.yml` and `docs/ai/roles/*.md` would look like. Copy and adapt to your actual medical device project.
 
 ---
 
@@ -16,7 +16,7 @@ Medical device software development under FDA / IEC / ISO regimes has more requi
 - **Quality management** must be auditable (ISO 13485)
 - **Traceability** between requirements, design, code, and tests is non-negotiable
 
-Each of these can be its own role in the Skynet roster.
+Each of these can be its own role in the Agentry roster.
 
 ---
 
@@ -36,7 +36,7 @@ Each of these can be its own role in the Skynet roster.
 | `traceability_tracker` | Bidirectional req → design → code → tests | IEC 62304 §5.1.1 |
 | `release` | Version + tag + Design History File update + GitHub Release | ISO 13485 §7.5.3 |
 
-11 roles. Each runs in its own forever-loop. Each has its own `cli` and timeouts in `.skynet/config.yml`. Each has its own rule file in `docs/ai/roles/`.
+11 roles. Each runs in its own forever-loop. Each has its own `cli` and timeouts in `.agentry/config.yml`. Each has its own rule file in `docs/ai/roles/`.
 
 ---
 
@@ -68,7 +68,7 @@ ready-for-merge             → GitHub auto-merge
 ```
 docs/examples/medical-device/
 ├── README.md                                  ← this file
-├── .skynet/
+├── .agentry/
 │   └── config.yml                             ← 11-role declaration
 └── docs/
     └── ai/
@@ -80,17 +80,17 @@ docs/examples/medical-device/
             └── traceability_tracker.md        ← bidirectional traceability
 ```
 
-The standard 6 roles (`researcher`, `architect`, `implementer`, `tester`, `code_reviewer`, `release`) are not duplicated here — those rule files are project-specific and not unique to medical device development. Use the generic templates from `skynet init` and adapt.
+The standard 6 roles (`researcher`, `architect`, `implementer`, `tester`, `code_reviewer`, `release`) are not duplicated here — those rule files are project-specific and not unique to medical device development. Use the generic templates from `agentry init` and adapt.
 
 ---
 
 ## Setup
 
-1. Run `skynet init --template medical-device` in your medical device repo
-2. Edit `.skynet/config.yml` to set models per role (consider Opus for `quality_reviewer`, `regulatory_reviewer`, `traceability_tracker` — they need long context and careful reasoning)
+1. Run `agentry init --template medical-device` in your medical device repo
+2. Edit `.agentry/config.yml` to set models per role (consider Opus for `quality_reviewer`, `regulatory_reviewer`, `traceability_tracker` — they need long context and careful reasoning)
 3. Customize each `docs/ai/roles/*.md` rule file to your specific Quality Manual, Design History File location, applicable standards, etc.
-4. `skynet doctor --target <repo> --init-labels`
-5. `skynet target add --repo <repo>`
+4. `agentry doctor --target <repo> --init-labels`
+5. `agentry target add --repo <repo>`
 
 ---
 
@@ -101,6 +101,6 @@ This example is **starting-point documentation, not a regulatory template**. You
 - Verifying that the rule files reflect your actual Quality Management System
 - Ensuring AI-generated content (designs, reviews, traceability) meets your verification + validation requirements before regulatory submission
 - Auditing whether autonomous AI workflows are acceptable under your QMS — many MDRs require specific human-in-the-loop steps that this example does not encode
-- Treating Skynet's outputs as **drafts for expert review**, not as final regulatory artifacts
+- Treating Agentry's outputs as **drafts for expert review**, not as final regulatory artifacts
 
 The framework is a productivity aid. Compliance responsibility stays with the organization deploying it.

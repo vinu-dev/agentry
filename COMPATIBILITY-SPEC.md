@@ -1,8 +1,8 @@
-# Skynet Agentry — Compatibility Specification
+# Agentry — Compatibility Specification
 
 Status: **v0.0a-final (pre-implementation)**
 
-The contract a target repository must satisfy to be operated on by Skynet Agentry. Short, because the framework is small and most of the project-specific logic lives in the target repo's role rule files.
+The contract a target repository must satisfy to be operated on by Agentry. Short, because the framework is small and most of the project-specific logic lives in the target repo's role rule files.
 
 Architecture: [`docs/architecture.md`](docs/architecture.md). Practical guide: [`docs/how-to-use.md`](docs/how-to-use.md). Example for regulated software: [`docs/examples/medical-device/`](docs/examples/medical-device/).
 
@@ -12,7 +12,7 @@ Architecture: [`docs/architecture.md`](docs/architecture.md). Practical guide: [
 
 Three things. That's it.
 
-### 1.1 `.skynet/config.yml`
+### 1.1 `.agentry/config.yml`
 
 Per-target agent declarations + timeouts. Declares which roles exist for this project and which CLI/timeouts each gets. **No prompt strings** — the framework supplies a generic prompt.
 
@@ -24,7 +24,7 @@ For a small project, that's typically 5-7 files. For a regulated medical device 
 
 ### 1.3 GitHub labels referenced by the rule files
 
-The rule files specify which labels signal work for each role. The framework calls `skynet doctor --init-labels` to create them in the target repo if missing.
+The rule files specify which labels signal work for each role. The framework calls `agentry doctor --init-labels` to create them in the target repo if missing.
 
 For the standard 6-role hobby roster, the labels are:
 - `ready-for-design`
@@ -40,7 +40,7 @@ For an extended medical device roster, more labels exist (e.g., `ready-for-quali
 
 ## 2. The roles are extensible
 
-Skynet Agentry doesn't bake in a fixed roster. **A target repo declares whatever roles it needs in `.skynet/config.yml`.** The framework spawns one forever-loop per declared role.
+Agentry doesn't bake in a fixed roster. **A target repo declares whatever roles it needs in `.agentry/config.yml`.** The framework spawns one forever-loop per declared role.
 
 ### Common starter roster (most projects)
 
@@ -125,7 +125,7 @@ Each transition is encoded in the corresponding role's `docs/ai/roles/<role>.md`
 
 ---
 
-## 4. `.skynet/config.yml` — schema
+## 4. `.agentry/config.yml` — schema
 
 ```yaml
 # Required: which target repo this config governs
@@ -193,7 +193,7 @@ Operator tunes per project.
 
 ```toml
 [host]
-state_dir = "~/.skynet/state"
+state_dir = "~/.agentry/state"
 
 [github]
 token_env = "GITHUB_TOKEN"
@@ -272,15 +272,15 @@ General loop:
 If docs/ai/roles/{role_name}.md doesn't exist, exit with code 1.
 ```
 
-`{role_name}` and `{other_roles}` are substituted from `.skynet/config.yml`. Nothing else changes.
+`{role_name}` and `{other_roles}` are substituted from `.agentry/config.yml`. Nothing else changes.
 
 ---
 
-## 8. `skynet doctor` validation
+## 8. `agentry doctor` validation
 
-`skynet doctor --target <path>` checks:
+`agentry doctor --target <path>` checks:
 
-1. `.skynet/config.yml` exists, parses, contains at least one agent
+1. `.agentry/config.yml` exists, parses, contains at least one agent
 2. Every declared agent has all required fields (cli, args, interval_min, total_min, stall_min)
 3. Every declared agent has a corresponding `docs/ai/roles/<role>.md` file present and non-empty
 4. Every CLI binary in the config exists on PATH (or absolute path is valid)
@@ -288,7 +288,7 @@ If docs/ai/roles/{role_name}.md doesn't exist, exit with code 1.
 
 Exit codes: `0` = pass, `1` = warnings, `2` = fail.
 
-The orchestrator runs `skynet doctor` once at startup and refuses to spawn any role whose prerequisites fail.
+The orchestrator runs `agentry doctor` once at startup and refuses to spawn any role whose prerequisites fail.
 
 ---
 
@@ -300,7 +300,7 @@ If a PR's diff touches any glob in `sensitive_paths`, the Reviewer's rule file s
 
 - The auto-merge guard is enforced **by the role rule file**, not by the framework
 - The framework's responsibility is just: dispatch the agent, give it the diff
-- The repo owner's `docs/ai/roles/reviewer.md` (or `docs/ai/roles/regulatory_reviewer.md`, etc.) says: "if `git diff --name-only` matches any pattern in `.skynet/config.yml`'s `sensitive_paths`, label `blocked` and exit"
+- The repo owner's `docs/ai/roles/reviewer.md` (or `docs/ai/roles/regulatory_reviewer.md`, etc.) says: "if `git diff --name-only` matches any pattern in `.agentry/config.yml`'s `sensitive_paths`, label `blocked` and exit"
 
 This keeps the framework dumb and the policy in the repo where it belongs.
 
@@ -321,17 +321,17 @@ The Operator is responsible for host setup: SSH credentials, network reachabilit
 Informal. When a breaking change happens:
 
 - Bump the version comment at the top of this file
-- Update `skynet doctor` to handle both old and new
+- Update `agentry doctor` to handle both old and new
 - Provide a migration note
 
-There's no JSON Schema file, no PEP 440 ranges, no version handshake. The framework either works against your repo or it doesn't, and `skynet doctor` tells you which.
+There's no JSON Schema file, no PEP 440 ranges, no version handshake. The framework either works against your repo or it doesn't, and `agentry doctor` tells you which.
 
 ---
 
 ## 12. Glossary
 
-- **Operator** — the human running Skynet Agentry. Triages new issues, vetos sensitive merges, handles `blocked` items.
-- **Target** — any repo with `.skynet/config.yml` + `docs/ai/roles/*.md` + the labels referenced by those rule files.
+- **Operator** — the human running Agentry. Triages new issues, vetos sensitive merges, handles `blocked` items.
+- **Target** — any repo with `.agentry/config.yml` + `docs/ai/roles/*.md` + the labels referenced by those rule files.
 - **Role rule file** — `docs/ai/roles/<role>.md`. Repo-specific instructions for one agent role.
 - **Forever-loop** — the orchestrator's per-role thread that wakes the agent, waits, sleeps, repeats.
 - **Generic prompt** — the framework-synthesized prompt that wraps every role invocation, encoding the parallel-pipeline pattern. Same across all roles and projects.

@@ -1,8 +1,8 @@
-# Skynet Agentry
+# Agentry
 
 Status: **v0.0a-final (spec complete, pre-implementation)**
 
-Skynet Agentry is a small Python daemon that runs **N forever-loops in parallel**, one per role declared by the target repo. Each loop spawns an LLM CLI subprocess (Claude Code, Codex CLI, etc.) at its own interval. The framework supplies a generic prompt encoding the parallel-pipeline pattern; the target repo supplies project-specific role rule files at `docs/ai/roles/<role>.md`. The agent does the work, exits. The daemon supervises: timeouts, restarts, Discord pings.
+Agentry is a small Python daemon that runs **N forever-loops in parallel**, one per role declared by the target repo. Each loop spawns an LLM CLI subprocess (Claude Code, Codex CLI, etc.) at its own interval. The framework supplies a generic prompt encoding the parallel-pipeline pattern; the target repo supplies project-specific role rule files at `docs/ai/roles/<role>.md`. The agent does the work, exits. The daemon supervises: timeouts, restarts, Discord pings.
 
 That's the whole product. ~200 lines of Python. **N is whatever the repo declares** — 6 for a hobby project, 11+ for a medical device project.
 
@@ -36,11 +36,11 @@ Same framework, more threads. See [`docs/examples/medical-device/`](docs/example
 
 ## What target repos provide
 
-A repo is "Skynet-ready" when it has:
+A repo is "Agentry-ready" when it has:
 
 ```
 target-repo/
-├── .skynet/config.yml                ← agent assignments + timeouts
+├── .agentry/config.yml                ← agent assignments + timeouts
 └── docs/ai/roles/
     ├── researcher.md                  ← project-specific instructions per role
     ├── architect.md
@@ -50,7 +50,7 @@ target-repo/
     └── release.md
 ```
 
-Plus 6 GitHub labels (`ready-for-design`, `ready-for-implementation`, `ready-for-test`, `tests-failed`, `ready-for-review`, `blocked`) — created by `skynet doctor --init-labels`.
+Plus 6 GitHub labels (`ready-for-design`, `ready-for-implementation`, `ready-for-test`, `tests-failed`, `ready-for-review`, `blocked`) — created by `agentry doctor --init-labels`.
 
 The framework prompts are generic ("read docs/ai/roles/X.md and follow it"). The actual work instructions live in the repo. Different repos can have different conventions.
 
@@ -73,18 +73,18 @@ Nothing runs yet. v0.0a is the spec — design only, no code. The runtime ships 
 ## Install (when v0.1 ships)
 
 ```bash
-uv tool install --from git+ssh://git@github.com/vinu-dev/skynet-agentry.git skynet-agentry
-skynet --version
-skynet service install                    # systemd or NSSM
+uv tool install --from git+ssh://git@github.com/vinu-dev/agentry.git agentry
+agentry --version
+agentry service install                    # systemd or NSSM
 ```
 
-Then configure a target repo with `.skynet/config.yml` + role rule files, and `skynet target add --repo <url>`.
+Then configure a target repo with `.agentry/config.yml` + role rule files, and `agentry target add --repo <url>`.
 
 ## License
 
 **AGPL-3.0** — see [LICENSE](LICENSE).
 
-This is intentional copyleft. If you fork Skynet Agentry, modify it, and run it
+This is intentional copyleft. If you fork Agentry, modify it, and run it
 as a service to others (including running it inside your company on private
 projects you don't open), you must release the source of your modified version
 under AGPL-3.0 as well.
@@ -92,6 +92,6 @@ under AGPL-3.0 as well.
 ### Commercial license
 
 The AGPL terms are not friendly to closed-source commercial use. If you want
-to use Skynet Agentry inside a proprietary product or service without the
+to use Agentry inside a proprietary product or service without the
 AGPL obligations, a commercial license is available — contact
 [@vinu-dev](https://github.com/vinu-dev).

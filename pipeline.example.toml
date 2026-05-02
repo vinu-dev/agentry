@@ -1,19 +1,19 @@
-# Skynet Agentry — per-host configuration
+# Agentry — per-host configuration
 # =============================================================================
 #
-# Copy this file to ~/.skynet/pipeline.local.toml (Linux)
-# or %USERPROFILE%\.skynet\pipeline.local.toml (Windows).
+# Copy this file to ~/.agentry/pipeline.local.toml (Linux)
+# or %USERPROFILE%\.agentry\pipeline.local.toml (Windows).
 # The local copy is gitignored and machine-specific.
 #
 # Per-target settings (which agents, which models, what timeouts) live in the
-# target repo's .skynet/config.yml — NOT here.
+# target repo's .agentry/config.yml — NOT here.
 
 [host]
 # Where the orchestrator keeps logs and runtime state.
-state_dir = "~/.skynet/state"
+state_dir = "~/.agentry/state"
 
 # Path to the secrets file. Loaded once at startup.
-env_file = "~/.skynet/.env"
+env_file = "~/.agentry/.env"
 
 [github]
 # Env-var name (in env_file) holding the GitHub PAT.
