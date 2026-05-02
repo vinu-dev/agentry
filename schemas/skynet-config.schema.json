@@ -1,0 +1,337 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/vinu-dev/skynet-agentry/schemas/skynet-config.schema.json",
+  "title": "Skynet Agentry Target Configuration",
+  "description": "Schema for .skynet/config.yml in target repositories. Loaded and enforced by `skynet doctor` and by the orchestrator at task dispatch. Companion to COMPATIBILITY-SPEC.md.",
+  "type": "object",
+  "required": [
+    "skynet_version",
+    "project",
+    "test",
+    "auto_merge",
+    "agents",
+    "budget",
+    "notification"
+  ],
+  "additionalProperties": false,
+
+  "properties": {
+    "skynet_version": {
+      "type": "string",
+      "description": "PEP 440 version specifier for the framework version range this target supports.",
+      "minLength": 1,
+      "examples": [
+        ">=0.4,<1.0",
+        "==0.4.2",
+        ">=0.5"
+      ]
+    },
+
+    "project": {
+      "type": "object",
+      "required": ["name", "languages"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Short project name; used in agent prompts and PR bodies."
+        },
+        "languages": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1,
+          "uniqueItems": true,
+          "description": "Languages the project uses; informs which prompt-extras apply."
+        },
+        "description": {
+          "type": "string",
+          "default": ""
+        }
+      }
+    },
+
+    "build": {
+      "type": "object",
+      "description": "Build commands. Required only if release.enabled is true.",
+      "additionalProperties": { "type": "string" },
+      "properties": {
+        "default": { "type": "string" },
+        "prod": { "type": "string" }
+      }
+    },
+
+    "test": {
+      "type": "object",
+      "description": "Test matrix. `unit` is the minimum required for any agent operation.",
+      "required": ["unit"],
+      "additionalProperties": { "type": "string" },
+      "properties": {
+        "unit": { "type": "string", "minLength": 1 },
+        "integration": { "type": "string" },
+        "contract": { "type": "string" },
+        "e2e": { "type": "string" },
+        "lint": { "type": "string" },
+        "format": { "type": "string" }
+      }
+    },
+
+    "hardware": {
+      "type": "object",
+      "description": "Hardware test rigs. In v0, enabled MUST be false.",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": false
+        },
+        "rigs": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/rig" },
+          "default": []
+        }
+      }
+    },
+
+    "release": {
+      "type": "object",
+      "description": "Release configuration. In v0, strategy MUST be 'none'.",
+      "additionalProperties": false,
+      "properties": {
+        "strategy": {
+          "type": "string",
+          "enum": ["none", "github-release", "yocto-swu"],
+          "default": "none"
+        },
+        "trigger": {
+          "type": "string",
+          "description": "Examples: milestone, merge_count:5, cron:0 0 * * 0",
+          "default": "milestone"
+        },
+        "artifact_glob": { "type": "string" },
+        "signing_key_env": { "type": "string" }
+      }
+    },
+
+    "auto_merge": {
+      "type": "object",
+      "description": "Path-policy table for auto-merge. See COMPATIBILITY-SPEC.md §11.",
+      "required": ["default_policy"],
+      "additionalProperties": false,
+      "properties": {
+        "default_policy": { "$ref": "#/$defs/policy" },
+        "hold_hours": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 168,
+          "default": 24,
+          "description": "Hold window for soft policy. Discord notification is emitted at hold start."
+        },
+        "path_policies": {
+          "type": "object",
+          "description": "Glob → policy mapping. Longest-glob wins; combined across files with most-restrictive wins.",
+          "patternProperties": {
+            "^.+$": { "$ref": "#/$defs/policy" }
+          },
+          "additionalProperties": false
+        }
+      }
+    },
+
+    "agents": {
+      "type": "object",
+      "description": "Agent roster. Implementer and Reviewer MUST resolve to different vendors (enforced semantically by `skynet doctor`, not by this schema).",
+      "required": [
+        "researcher",
+        "architect",
+        "implementer",
+        "tester",
+        "pr_author",
+        "reviewer"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "researcher": {
+          "type": "object",
+          "required": ["enabled"],
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "model": { "type": "string" },
+            "provider": { "$ref": "#/$defs/provider" },
+            "schedule": {
+              "type": "string",
+              "description": "Cron expression."
+            },
+            "max_per_day": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 5,
+              "description": "Cap on issues created per day; counts toward budget boundary."
+            }
+          },
+          "if": { "properties": { "enabled": { "const": true } }, "required": ["enabled"] },
+          "then": { "required": ["model", "provider", "schedule"] }
+        },
+
+        "architect": { "$ref": "#/$defs/agent_simple" },
+        "implementer": { "$ref": "#/$defs/agent_simple" },
+        "tester": { "$ref": "#/$defs/agent_simple" },
+        "pr_author": { "$ref": "#/$defs/agent_simple" },
+        "reviewer": { "$ref": "#/$defs/agent_simple" },
+
+        "release": {
+          "type": "object",
+          "required": ["enabled"],
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "model": { "type": "string" },
+            "provider": { "$ref": "#/$defs/provider" },
+            "trigger": {
+              "type": "string",
+              "examples": ["milestone", "merge_count:5", "cron:0 0 * * 0"]
+            }
+          },
+          "if": { "properties": { "enabled": { "const": true } }, "required": ["enabled"] },
+          "then": { "required": ["model", "provider", "trigger"] }
+        }
+      }
+    },
+
+    "budget": {
+      "type": "object",
+      "description": "Cost / rate / concurrency caps. The fourth trust boundary.",
+      "required": [
+        "daily_dollars",
+        "per_task_tokens",
+        "retry_cap",
+        "concurrent_tasks"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "daily_dollars": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Cumulative across all agents. Watchdog pauses all agents at 100%."
+        },
+        "per_task_tokens": {
+          "type": "integer",
+          "minimum": 1000
+        },
+        "retry_cap": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10,
+          "default": 3,
+          "description": "Per-state retries. Exceeding moves task to quarantined."
+        },
+        "concurrent_tasks": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10,
+          "default": 2
+        }
+      }
+    },
+
+    "notification": {
+      "type": "object",
+      "required": ["channel", "webhook_env"],
+      "additionalProperties": false,
+      "properties": {
+        "channel": {
+          "type": "string",
+          "enum": ["discord", "telegram", "email"],
+          "default": "discord",
+          "description": "v0 supports discord only. Others reserved for v1+."
+        },
+        "webhook_env": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Name of the env var in `~/.skynet/.env` holding the webhook URL or credential."
+        }
+      }
+    },
+
+    "traceability": {
+      "type": "object",
+      "description": "Optional. Required for the `full` compatibility level.",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": false
+        },
+        "check_command": {
+          "type": "string"
+        },
+        "required_for_paths": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "if": { "properties": { "enabled": { "const": true } }, "required": ["enabled"] },
+      "then": { "required": ["check_command"] }
+    }
+  },
+
+  "$defs": {
+    "policy": {
+      "type": "string",
+      "enum": ["hard", "soft", "none"],
+      "description": "hard = merge on green CI + Reviewer approval; soft = merge after hold_hours unless vetoed; none = never auto-merge."
+    },
+
+    "provider": {
+      "type": "string",
+      "enum": ["anthropic", "openai", "codex_cli", "local"],
+      "description": "Model provider. `codex_cli` and `openai` are treated as the same vendor by the multi-vendor rule in `skynet doctor`."
+    },
+
+    "agent_simple": {
+      "type": "object",
+      "required": ["enabled"],
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "model": { "type": "string" },
+        "provider": { "$ref": "#/$defs/provider" }
+      },
+      "if": { "properties": { "enabled": { "const": true } }, "required": ["enabled"] },
+      "then": { "required": ["model", "provider"] }
+    },
+
+    "rig": {
+      "type": "object",
+      "description": "A hardware test rig. v1+ only.",
+      "required": ["name"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "server": { "$ref": "#/$defs/rig_node" },
+        "camera": { "$ref": "#/$defs/rig_node" }
+      }
+    },
+
+    "rig_node": {
+      "type": "object",
+      "description": "A single device within a rig.",
+      "additionalProperties": false,
+      "properties": {
+        "ip": {
+          "type": "string",
+          "format": "ipv4"
+        },
+        "serial": {
+          "type": "string",
+          "description": "COM port (Windows) or device path (WSL/Linux)."
+        },
+        "smart_plug": {
+          "type": "string",
+          "description": "Smart-plug URI for power-cycle recovery, e.g. kasa://192.168.1.100"
+        }
+      }
+    }
+  }
+}
