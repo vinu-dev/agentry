@@ -1,0 +1,102 @@
+# Skynet Agentry — Medical Device project configuration (example)
+# =============================================================================
+#
+# 11 roles for IEC 62304 + ISO 13485 + ISO 14971 + IEC 81001-5-1 + FDA 21 CFR
+# 820 compliance. See docs/examples/medical-device/README.md for the lifecycle.
+#
+# Models: Opus is recommended for the heavy reviewer roles (quality, cyber,
+# regulatory, traceability) because they need long context and careful
+# reasoning. Sonnet is fine for routine roles.
+
+target_repo: org/medical-device-product
+
+agents:
+
+  researcher:
+    cli: claude
+    args: ["-p", "--dangerously-skip-permissions"]
+    interval_min: 240          # 4 hours — medical projects iterate slower
+    total_min: 30
+    stall_min: 5
+
+  risk_analyst:
+    cli: claude
+    args: ["-p", "--dangerously-skip-permissions"]
+    interval_min: 5
+    total_min: 30
+    stall_min: 5
+
+  architect:
+    cli: claude
+    args: ["-p", "--dangerously-skip-permissions"]
+    interval_min: 5
+    total_min: 45              # designs reference more docs
+    stall_min: 5
+
+  implementer:
+    cli: codex
+    args: ["--auto-approve"]
+    interval_min: 5
+    total_min: 90              # implementation may require unit verification records per IEC 62304 §5.5.5
+    stall_min: 10
+
+  tester:
+    cli: claude
+    args: ["-p", "--dangerously-skip-permissions"]
+    interval_min: 5
+    total_min: 60              # may include hardware-in-the-loop verification
+    stall_min: 15
+
+  code_reviewer:
+    cli: claude
+    args: ["-p", "--dangerously-skip-permissions"]
+    interval_min: 5
+    total_min: 30
+    stall_min: 5
+
+  quality_reviewer:
+    cli: claude                # Opus recommended via per-target setup
+    args: ["-p", "--dangerously-skip-permissions", "--model", "claude-opus-4-7"]
+    interval_min: 5
+    total_min: 45
+    stall_min: 5
+
+  cybersecurity_reviewer:
+    cli: claude
+    args: ["-p", "--dangerously-skip-permissions", "--model", "claude-opus-4-7"]
+    interval_min: 5
+    total_min: 45
+    stall_min: 5
+
+  regulatory_reviewer:
+    cli: claude
+    args: ["-p", "--dangerously-skip-permissions", "--model", "claude-opus-4-7"]
+    interval_min: 10
+    total_min: 60
+    stall_min: 5
+
+  traceability_tracker:
+    cli: claude
+    args: ["-p", "--dangerously-skip-permissions"]
+    interval_min: 10
+    total_min: 30
+    stall_min: 5
+
+  release:
+    cli: claude
+    args: ["-p", "--dangerously-skip-permissions"]
+    interval_min: 1440         # daily check
+    total_min: 90              # release builds + DHF updates
+    stall_min: 15
+
+# Sensitive paths — Reviewer rule files reference these to know when to label
+# `blocked` instead of approving.
+sensitive_paths:
+  - "**/auth/**"
+  - "**/crypto/**"
+  - "**/safety/**"
+  - "**/risk/**"
+  - "**/compliance/**"
+  - "docs/dhf/**"              # Design History File
+  - "docs/risk/**"
+  - "docs/qms/**"              # Quality Management System

@@ -2,13 +2,13 @@
 
 Status: **v0.0a-final (spec complete, pre-implementation)**
 
-Skynet Agentry is a small Python daemon that runs **6 forever-loops in parallel**, one per role. Each loop spawns an LLM CLI subprocess (Claude Code, Codex CLI, etc.) at its own interval, the subprocess does its job using the rules defined in the target repo, and exits. The daemon supervises: timeouts, restarts, Discord pings.
+Skynet Agentry is a small Python daemon that runs **N forever-loops in parallel**, one per role declared by the target repo. Each loop spawns an LLM CLI subprocess (Claude Code, Codex CLI, etc.) at its own interval. The framework supplies a generic prompt encoding the parallel-pipeline pattern; the target repo supplies project-specific role rule files at `docs/ai/roles/<role>.md`. The agent does the work, exits. The daemon supervises: timeouts, restarts, Discord pings.
 
-That's the whole product. ~200 lines of Python.
+That's the whole product. ~200 lines of Python. **N is whatever the repo declares** — 6 for a hobby project, 11+ for a medical device project.
 
 State lives in GitHub (issues, labels, PRs, branches). The daemon has no persistent state. Restart it any time.
 
-## The 6 roles
+## Common starter roster (6 roles)
 
 | Role | Reads | Produces |
 |------|-------|----------|
@@ -20,6 +20,19 @@ State lives in GitHub (issues, labels, PRs, branches). The daemon has no persist
 | **Release Engineer** | merged commits since last tag | tag + build + GitHub Release |
 
 Each role gets its own model assignment. Operator picks: Claude for research, Codex for implementation, local Llama for review, etc.
+
+## Extended roster — medical device (11 roles)
+
+For regulated software (IEC 62304 + ISO 13485 + ISO 14971 + IEC 81001-5-1 + FDA 21 CFR 820), the roster grows to include:
+
+- **risk_analyst** (ISO 14971)
+- **code_reviewer** (functional review)
+- **quality_reviewer** (ISO 13485 / IEC 62304 conformance)
+- **cybersecurity_reviewer** (IEC 81001-5-1 + FDA cyber guidance)
+- **regulatory_reviewer** (FDA 510(k) / 21 CFR 820)
+- **traceability_tracker** (bidirectional req → design → code → tests)
+
+Same framework, more threads. See [`docs/examples/medical-device/`](docs/examples/medical-device/) for a full config and rule files.
 
 ## What target repos provide
 
