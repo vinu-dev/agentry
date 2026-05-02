@@ -242,26 +242,23 @@ if (-not $SkipNssm) {
 # 7. ~/.agentry/ host config + templates
 # -----------------------------------------------------------------------------
 
-Write-Step "Setting up Agentry user directory ($env:USERPROFILE\Agentry)"
+Write-Step "Setting up host secrets directory ($env:USERPROFILE\Agentry)"
 
-# Visible folder under user profile so it's easy to find in Explorer.
-# Linux uses the dot-folder convention; Windows uses a regular folder.
+# This is the ONLY host-level Agentry folder. It holds just the .env file
+# with your secrets (GITHUB_TOKEN etc.). Per-target logs and runtime state
+# live INSIDE each target repo at <target>\.agentry\{logs,state}\.
 $agentryDir = Join-Path $env:USERPROFILE 'Agentry'
-$stateDir = Join-Path $agentryDir 'state'
-$logsDir = Join-Path $agentryDir 'logs'
-foreach ($d in @($agentryDir, $stateDir, $logsDir)) {
-    if (-not (Test-Path $d)) {
-        New-Item -ItemType Directory -Path $d -Force | Out-Null
-        Write-OK "created $d"
-    } else {
-        Write-Skip "$d already exists"
-    }
+if (-not (Test-Path $agentryDir)) {
+    New-Item -ItemType Directory -Path $agentryDir -Force | Out-Null
+    Write-OK "created $agentryDir"
+} else {
+    Write-Skip "$agentryDir already exists"
 }
 
-# Drop template .env / pipeline.local.toml from the repo (or fetch from web
-# if running via iwr | iex with no clone).
+# Drop template .env from the repo (or fetch from web if running via iwr | iex).
+# We no longer write pipeline.local.toml — host-level config has been folded
+# into env vars and per-target settings.
 $envPath = Join-Path $agentryDir '.env'
-$tomlPath = Join-Path $agentryDir 'pipeline.local.toml'
 
 # Find the script's own dir if running locally; otherwise download templates.
 $scriptDir = $null
@@ -286,20 +283,10 @@ if (-not (Test-Path $envPath)) {
     $envBody = Get-Template '.env.example' '.env.example' '.env.example'
     if ($envBody) {
         Set-Content -Path $envPath -Value $envBody -NoNewline
-        Write-OK "wrote $envPath (template — fill in your secrets)"
+        Write-OK "wrote $envPath (template — fill in GITHUB_TOKEN)"
     }
 } else {
     Write-Skip "$envPath already exists; not overwriting"
-}
-
-if (-not (Test-Path $tomlPath)) {
-    $tomlBody = Get-Template 'pipeline.example.toml' 'pipeline.example.toml' 'pipeline.example.toml'
-    if ($tomlBody) {
-        Set-Content -Path $tomlPath -Value $tomlBody -NoNewline
-        Write-OK "wrote $tomlPath"
-    }
-} else {
-    Write-Skip "$tomlPath already exists; not overwriting"
 }
 
 # -----------------------------------------------------------------------------
@@ -335,10 +322,16 @@ if ($verifyOk) {
 
 Write-Host @"
 
-Your Agentry data folder: $agentryDir
-This is where your secrets, host config, logs, and state live. To uninstall
-later, run scripts/uninstall.ps1 — it removes this folder (and the service,
-and the npm globals) cleanly.
+Your host secrets folder: $agentryDir
+The only thing here is .env (your GITHUB_TOKEN etc.).
+
+Per-target logs and runtime state live INSIDE each target repo at
+<target>\.agentry\{logs,state}\ — gitignored automatically when you run
+`agentry init` in a target. So each repo carries its own activity history
+with it; nothing scattered in your user profile.
+
+To uninstall later: scripts/uninstall.ps1 (removes the service, npm globals,
+and this secrets folder; per-target state stays in your repos).
 
 Next steps (you must do these — they need your browser / credentials):
 

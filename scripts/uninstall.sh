@@ -115,17 +115,20 @@ fi
 # 4. Remove the user data folder
 # -----------------------------------------------------------------------------
 
-step "Cleaning up $AGENTRY_DIR"
+step "Cleaning up $AGENTRY_DIR (host secrets folder)"
 
 if [[ -d "$AGENTRY_DIR" ]]; then
     if [[ "$KEEP_CONFIG" -eq 1 ]]; then
-        for sub in state logs workspaces; do
-            if [[ -d "$AGENTRY_DIR/$sub" ]]; then
+        # Preserve .env; remove legacy state/logs from old installs.
+        for sub in state logs workspaces pipeline.local.toml; do
+            if [[ -e "$AGENTRY_DIR/$sub" ]]; then
                 rm -rf "$AGENTRY_DIR/$sub"
-                ok "removed $AGENTRY_DIR/$sub"
+                ok "removed $AGENTRY_DIR/$sub (legacy)"
             fi
         done
-        ok "kept $AGENTRY_DIR/.env and pipeline.local.toml (--keep-config)"
+        if [[ -f "$AGENTRY_DIR/.env" ]]; then
+            ok "kept $AGENTRY_DIR/.env (--keep-config)"
+        fi
     else
         rm -rf "$AGENTRY_DIR"
         ok "removed $AGENTRY_DIR"
@@ -133,6 +136,10 @@ if [[ -d "$AGENTRY_DIR" ]]; then
 else
     skip "$AGENTRY_DIR not present"
 fi
+
+# Note: per-target .agentry/{logs,state}/ folders inside your target repos
+# are NOT touched. Those are part of your project; clean them per-repo
+# (e.g. `git clean -fdx .agentry/`) if you want.
 
 # -----------------------------------------------------------------------------
 # 5. Optionally remove Node.js (--remove-deps)
@@ -193,16 +200,20 @@ echo -e "\n${C_GREEN}=== Uninstall complete ===${C_RESET}"
 
 cat <<EOF
 
-What was removed:
+What was removed (host-level):
   - agentry systemd user service (if registered)
   - agentry Python package
   - npm globals: @anthropic-ai/claude-code, @openai/codex
-$( [[ "$KEEP_CONFIG" -eq 1 ]] && echo "  - $AGENTRY_DIR/{state,logs,workspaces}" || echo "  - $AGENTRY_DIR (entire user data folder)" )
+$( [[ "$KEEP_CONFIG" -eq 1 ]] && echo "  - any legacy state/logs in $AGENTRY_DIR" || echo "  - $AGENTRY_DIR (host secrets folder)" )
 $( [[ "$REMOVE_DEPS" -eq 1 ]] && echo "  - Node.js + npm" )
 
 $( [[ "$KEEP_CONFIG" -eq 1 ]] && echo "Kept (per --keep-config):" )
 $( [[ "$KEEP_CONFIG" -eq 1 ]] && echo "  - $AGENTRY_DIR/.env" )
-$( [[ "$KEEP_CONFIG" -eq 1 ]] && echo "  - $AGENTRY_DIR/pipeline.local.toml" )
+
+What was NOT touched:
+  - <target>/.agentry/ folders inside your target repos
+    (those are part of each project; clean per-repo with
+     'git clean -fdx .agentry/' if you want to wipe activity history)
 
 $( [[ "$REMOVE_DEPS" -eq 0 ]] && echo "What was kept (use --remove-deps to also remove):" )
 $( [[ "$REMOVE_DEPS" -eq 0 ]] && echo "  - Node.js + npm" )

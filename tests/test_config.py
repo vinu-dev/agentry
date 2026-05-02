@@ -9,12 +9,15 @@ from pydantic import ValidationError
 
 from agentry.config import (
     AgentConfig,
-    HostConfig,
     TargetConfig,
     bundled_default_config_path,
     bundled_default_role_path,
+    host_env_file,
+    host_secrets_dir,
     load_target_config,
     role_rule_path,
+    target_logs_dir,
+    target_state_dir,
 )
 
 
@@ -146,9 +149,25 @@ agents:
             load_target_config(tmp_path)
 
 
-class TestHostConfig:
-    def test_defaults_when_field_blank(self):
-        cfg = HostConfig(state_dir=Path("/tmp/agentry-state"))
-        assert cfg.github_token_env == "GITHUB_TOKEN"
-        assert cfg.discord_webhook_env == "DISCORD_WEBHOOK_URL"
-        assert cfg.batch_notify_seconds == 60
+class TestHostPaths:
+    def test_host_secrets_dir_under_user_home(self):
+        p = host_secrets_dir()
+        assert p.parent == Path.home()
+        # Either ~/Agentry (Windows) or ~/.agentry (Linux/macOS)
+        assert p.name in {"Agentry", ".agentry"}
+
+    def test_host_env_file_inside_secrets_dir(self):
+        env = host_env_file()
+        assert env.parent == host_secrets_dir()
+        assert env.name == ".env"
+
+
+class TestTargetPaths:
+    def test_state_and_logs_inside_target(self, tmp_path: Path):
+        assert target_state_dir(tmp_path) == tmp_path / ".agentry" / "state"
+        assert target_logs_dir(tmp_path) == tmp_path / ".agentry" / "logs"
+
+    def test_paths_resolve_string_inputs(self, tmp_path: Path):
+        # Should accept Path or str
+        assert target_state_dir(str(tmp_path)).parent == tmp_path / ".agentry"
+        assert target_logs_dir(str(tmp_path)).parent == tmp_path / ".agentry"

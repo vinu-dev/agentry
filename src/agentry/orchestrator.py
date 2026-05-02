@@ -1,10 +1,10 @@
 """Orchestrator: spawns one forever-loop per declared role.
 
 Each role thread:
-  1. Builds the framework's generic prompt.
+  1. Builds the framework's generic prompt (or uses the per-role config prompt).
   2. Spawns the configured CLI as a subprocess in the target's working tree.
   3. Supervises with stall + total timeouts.
-  4. Logs the outcome to Discord.
+  4. Logs the outcome to Discord (if configured).
   5. Sleeps ``interval_min`` minutes, repeats.
 
 Threads are daemons. Main thread waits on a single ``shutdown_event`` that
@@ -16,6 +16,11 @@ path.
 Restart policy: if a role thread crashes (unhandled exception in our code),
 the orchestrator logs and respawns it. We never want a single role bug to
 silently take down the whole pipeline.
+
+Logs and runtime state for each invocation live INSIDE the target repo at
+``<target>/.agentry/logs/<role>/<timestamp>.log``. This keeps each target's
+activity history with the target itself; nothing host-level except the
+operator's secret ``.env``.
 """
 
 from __future__ import annotations
@@ -25,7 +30,7 @@ import threading
 import time
 from pathlib import Path
 
-from agentry.config import AgentConfig, HostConfig, TargetConfig
+from agentry.config import AgentConfig, TargetConfig, target_logs_dir
 from agentry.notify import DiscordNotifier, Event
 from agentry.prompt import make_prompt
 from agentry.supervisor import ExitReason, supervise
@@ -39,13 +44,11 @@ class Orchestrator:
     def __init__(
         self,
         target_config: TargetConfig,
-        host_config: HostConfig,
         target_path: Path,
         notifier: DiscordNotifier,
     ) -> None:
         self.target_config = target_config
-        self.host_config = host_config
-        self.target_path = target_path
+        self.target_path = Path(target_path).resolve()
         self.notifier = notifier
         self.shutdown_event = threading.Event()
         self._threads: list[threading.Thread] = []
@@ -110,11 +113,9 @@ class Orchestrator:
                         critical=True,
                     )
                 )
-                # Backoff so a fundamentally broken role doesn't busy-loop.
                 if consecutive_crashes >= 5:
                     logger.error("role %s crashed 5+ times; giving up", role)
                     return
-                # Wait before respawning — bounded so shutdown is responsive.
                 if self.shutdown_event.wait(timeout=min(60 * consecutive_crashes, 600)):
                     return
 
@@ -129,7 +130,7 @@ class Orchestrator:
         otherwise the framework's generic template is synthesized.
         """
         prompt = cfg.prompt if cfg.prompt else make_prompt(role, all_roles)
-        log_dir = self.host_config.state_dir / "logs" / role
+        log_dir = target_logs_dir(self.target_path) / role
         log_dir.mkdir(parents=True, exist_ok=True)
 
         while not self.shutdown_event.is_set():
@@ -154,7 +155,6 @@ class Orchestrator:
             if run.reason == ExitReason.INTERRUPTED:
                 return  # shutdown requested
 
-            # Sleep until next interval, but respond promptly to shutdown.
             sleep_seconds = cfg.interval_min * 60
             if self.shutdown_event.wait(timeout=sleep_seconds):
                 return

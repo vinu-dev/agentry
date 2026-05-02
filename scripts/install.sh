@@ -231,13 +231,14 @@ fi
 # 5. ~/.agentry/ host config + templates
 # -----------------------------------------------------------------------------
 
-step "Setting up Agentry user directory"
+step "Setting up host secrets directory"
 
-# Linux uses ~/.agentry/ (Unix dot-folder convention).
-# Windows uses %USERPROFILE%\Agentry\ (visible folder) — handled in install.ps1.
+# This is the ONLY host-level Agentry folder. It holds just the .env file
+# with your secrets (GITHUB_TOKEN etc.). Per-target logs and runtime state
+# live INSIDE each target repo at <target>/.agentry/{logs,state}/.
 AGENTRY_DIR="$HOME/.agentry"
-mkdir -p "$AGENTRY_DIR" "$AGENTRY_DIR/state" "$AGENTRY_DIR/logs"
-ok "ensured $AGENTRY_DIR + state/ + logs/"
+mkdir -p "$AGENTRY_DIR"
+ok "ensured $AGENTRY_DIR"
 
 # Find script's own dir if running locally; otherwise fetch from raw github.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || echo "")"
@@ -257,29 +258,17 @@ fetch_template() {
 }
 
 ENV_FILE="$AGENTRY_DIR/.env"
-TOML_FILE="$AGENTRY_DIR/pipeline.local.toml"
 
 if [[ ! -f "$ENV_FILE" ]]; then
     if fetch_template ".env.example" ".env.example" > "$ENV_FILE.tmp" 2>/dev/null; then
         mv "$ENV_FILE.tmp" "$ENV_FILE"
         chmod 600 "$ENV_FILE"
-        ok "wrote $ENV_FILE (template — fill in your secrets)"
+        ok "wrote $ENV_FILE (template — fill in GITHUB_TOKEN)"
     else
         warn "could not fetch .env.example; skipping"
     fi
 else
     skip "$ENV_FILE already exists; not overwriting"
-fi
-
-if [[ ! -f "$TOML_FILE" ]]; then
-    if fetch_template "pipeline.example.toml" "pipeline.example.toml" > "$TOML_FILE.tmp" 2>/dev/null; then
-        mv "$TOML_FILE.tmp" "$TOML_FILE"
-        ok "wrote $TOML_FILE"
-    else
-        warn "could not fetch pipeline.example.toml; skipping"
-    fi
-else
-    skip "$TOML_FILE already exists; not overwriting"
 fi
 
 # -----------------------------------------------------------------------------
@@ -308,6 +297,12 @@ fi
 # -----------------------------------------------------------------------------
 
 cat <<EOF
+
+${C_CYAN}Your host secrets folder: $AGENTRY_DIR${C_RESET}
+The only thing here is .env. Per-target logs and runtime state live
+INSIDE each target repo at <target>/.agentry/{logs,state}/ — gitignored
+automatically when you run \`agentry init\` in a target. So each repo
+carries its own activity history with it; nothing scattered in your home.
 
 ${C_CYAN}Next steps (you must do these — they need your browser / credentials):${C_RESET}
 

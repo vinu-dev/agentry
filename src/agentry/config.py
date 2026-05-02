@@ -1,10 +1,15 @@
 """Configuration loading and validation.
 
-Two layers:
-  - Per-target ``.agentry/config.yml`` in the target repository
-  - Per-host ``pipeline.local.toml`` in the user's Agentry directory:
-      Windows: ``%USERPROFILE%\\Agentry\\`` (visible folder)
-      Linux/macOS: ``~/.agentry/``  (Unix dot-folder convention)
+Two locations:
+  - Per-target ``<target>/.agentry/config.yml``: agent assignments + sensitive
+    paths. Committed to the target repo. Logs and runtime state ALSO live in
+    ``<target>/.agentry/{logs,state}/`` (gitignored), so each target carries
+    its own activity history with it.
+  - Per-host ``<host-agentry-dir>/.env``: secrets only (GITHUB_TOKEN,
+    optional API keys, optional Discord webhook URL). NEVER committed.
+
+      Windows: ``%USERPROFILE%\\Agentry\\.env``  (visible folder)
+      Linux/macOS: ``~/.agentry/.env``           (Unix dot-folder convention)
 
 The framework also ships **bundled defaults** for the standard 6-role roster.
 A target that provides nothing falls back to those defaults so operators can
@@ -15,7 +20,6 @@ from __future__ import annotations
 
 import os
 import sys
-import tomllib
 from importlib.resources import files
 from pathlib import Path
 
@@ -40,11 +44,9 @@ class AgentConfig(BaseModel):
         default=None,
         description=(
             "Optional per-role prompt. If set, this exact text is sent to the LLM CLI "
-            "as stdin (or wrapped in args, depending on the CLI). If unset, the framework "
-            "synthesizes a generic prompt from prompt.GENERIC_PROMPT_TEMPLATE that mentions "
-            "the parallel-pipeline pattern and points the agent at docs/ai/roles/<role>.md. "
-            "Most operators can leave this unset; override only when a CLI needs special "
-            "preamble or when you want very targeted instructions in the prompt itself."
+            "as stdin. If unset, the framework synthesizes a generic prompt from "
+            "prompt.GENERIC_PROMPT_TEMPLATE that mentions the parallel-pipeline pattern "
+            "and points the agent at docs/ai/roles/<role>.md."
         ),
     )
 
@@ -81,41 +83,47 @@ class TargetConfig(BaseModel):
         return v
 
 
-class HostConfig(BaseModel):
-    """Per-host ``pipeline.local.toml`` shape."""
-
-    state_dir: Path = Field(..., description="Where the daemon writes runtime state and logs")
-    env_file: Path | None = Field(default=None, description="Optional path to a .env file")
-    github_token_env: str = Field(default="GITHUB_TOKEN")
-    discord_webhook_env: str = Field(default="DISCORD_WEBHOOK_URL")
-    batch_notify_seconds: int = Field(default=60, gt=0)
-
-
 # -----------------------------------------------------------------------------
-# Bundled defaults
+# Path resolvers
 # -----------------------------------------------------------------------------
 
 DEFAULTS_PACKAGE = "agentry.defaults.standard"
 
 
-def agentry_user_dir() -> Path:
-    """Return the per-user Agentry root directory.
+def host_secrets_dir() -> Path:
+    """Return the per-user host directory that holds ONLY secrets (.env).
 
-    On Windows this is ``%USERPROFILE%\\Agentry\\`` — a visible folder under
-    your user profile so it's easy to find in Explorer. On Linux/macOS it's
-    ``~/.agentry/`` — the conventional Unix dot-folder for tool config.
+    Windows: ``%USERPROFILE%\\Agentry\\``
+    Linux/macOS: ``~/.agentry/``
 
-    All Agentry runtime data lives under this single root:
-      - .env                   (secrets)
-      - pipeline.local.toml    (host config)
-      - state/                 (heartbeats, sqlite, etc. — currently unused)
-      - logs/                  (per-role subprocess output)
-      - workspaces/            (reserved for v1+ multi-target clones)
+    This is the only host-level location Agentry uses. Everything else
+    (logs, state, target config) lives inside each target repository's
+    ``.agentry/`` directory.
     """
     home = Path.home()
     if sys.platform == "win32":
         return home / "Agentry"
     return home / ".agentry"
+
+
+def host_env_file() -> Path:
+    """Path to the operator's secrets file."""
+    return host_secrets_dir() / ".env"
+
+
+def target_state_dir(target_path: Path | str) -> Path:
+    """Where runtime state for ``target_path`` lives. Inside the target itself.
+
+    Path is ``<target>/.agentry/state/``. Created on demand by callers.
+    Should be in the target's ``.gitignore`` (the bundled defaults already
+    ignore ``.agentry/state/`` and ``.agentry/logs/``).
+    """
+    return Path(target_path) / ".agentry" / "state"
+
+
+def target_logs_dir(target_path: Path | str) -> Path:
+    """Where per-role agent stdout/stderr logs live for ``target_path``."""
+    return Path(target_path) / ".agentry" / "logs"
 
 
 def bundled_default_config_path() -> Path:
@@ -132,13 +140,10 @@ def load_target_config(target_path: Path | str) -> TargetConfig:
     """Load and validate the target repo's `.agentry/config.yml`.
 
     Falls back to the bundled standard config when the target doesn't have one.
-    The returned object always has ``target_repo`` reflecting the bundled
-    default's placeholder value if a fallback was used; callers should
-    override or refuse to dispatch when ``target_repo`` looks unset.
+    Callers can detect the fallback via ``(target_path / '.agentry' / 'config.yml').is_file()``.
 
     Args:
-        target_path: Path to the target repository root (the dir containing
-            ``.agentry/`` if present).
+        target_path: Path to the target repository root.
 
     Raises:
         FileNotFoundError: If ``target_path`` itself doesn't exist.
@@ -159,39 +164,19 @@ def load_target_config(target_path: Path | str) -> TargetConfig:
     return TargetConfig.model_validate(raw)
 
 
-def load_host_config(path: Path | str | None = None) -> HostConfig:
-    """Load and validate the per-host ``pipeline.local.toml``.
+def role_rule_path(target_path: Path, role: str) -> Path:
+    """Resolve the rule file path for ``role`` in this target.
 
-    When ``path`` is None, looks for ``<agentry_user_dir>/pipeline.local.toml``.
-    Falls back to in-memory defaults if the file doesn't exist.
+    Returns the target's ``docs/ai/roles/<role>.md`` if it exists; otherwise
+    the bundled default.
     """
-    user_dir = agentry_user_dir()
-
-    if path is None:
-        host_path = user_dir / "pipeline.local.toml"
-    else:
-        host_path = Path(path)
-
-    if not host_path.is_file():
-        # Defaults — operator can run with no config file at all.
-        return HostConfig(state_dir=user_dir / "state")
-
-    with host_path.open("rb") as f:
-        raw = tomllib.load(f)
-
-    flat = {
-        "state_dir": _opt(raw.get("host", {}).get("state_dir")),
-        "env_file": _opt(raw.get("host", {}).get("env_file")),
-        "github_token_env": raw.get("github", {}).get("token_env", "GITHUB_TOKEN"),
-        "discord_webhook_env": raw.get("notification", {}).get(
-            "discord_webhook_env", "DISCORD_WEBHOOK_URL"
-        ),
-        "batch_notify_seconds": raw.get("orchestrator", {}).get("batch_notify_seconds", 60),
-    }
-    flat = {k: v for k, v in flat.items() if v is not None}
-    if "state_dir" not in flat:
-        flat["state_dir"] = user_dir / "state"
-    return HostConfig.model_validate(flat)
+    target_specific = Path(target_path) / "docs" / "ai" / "roles" / f"{role}.md"
+    if target_specific.is_file():
+        return target_specific
+    bundled = bundled_default_role_path(role)
+    if Path(str(bundled)).is_file():
+        return Path(str(bundled))
+    return target_specific
 
 
 def _opt(v: object) -> Path | None:
@@ -201,32 +186,16 @@ def _opt(v: object) -> Path | None:
     return Path(os.path.expandvars(os.path.expanduser(str(v))))
 
 
-def role_rule_path(target_path: Path, role: str) -> Path:
-    """Resolve the rule file path for ``role`` in this target.
-
-    Returns the target's ``docs/ai/roles/<role>.md`` if it exists; otherwise
-    the bundled default. Callers can pass the result to the LLM as
-    "read this file."
-    """
-    target_specific = Path(target_path) / "docs" / "ai" / "roles" / f"{role}.md"
-    if target_specific.is_file():
-        return target_specific
-    bundled = bundled_default_role_path(role)
-    if Path(str(bundled)).is_file():
-        return Path(str(bundled))
-    # Neither exists — return the target path so the agent can fail loudly.
-    return target_specific
-
-
 __all__ = [
     "AgentConfig",
-    "HostConfig",
     "TargetConfig",
     "ValidationError",
-    "agentry_user_dir",
     "bundled_default_config_path",
     "bundled_default_role_path",
-    "load_host_config",
+    "host_env_file",
+    "host_secrets_dir",
     "load_target_config",
     "role_rule_path",
+    "target_logs_dir",
+    "target_state_dir",
 ]

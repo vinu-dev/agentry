@@ -12,6 +12,14 @@ Subcommands (v0.1):
 Out of scope for v0.1: pause/resume/kick/replay/quarantine/unlock — all of
 those need IPC between the running daemon and the CLI. Operators stop with
 the OS service manager (systemctl / nssm stop) for now.
+
+Layout:
+  - Per-target ``<target>/.agentry/config.yml`` — committed agent assignments
+  - Per-target ``<target>/.agentry/{logs,state}/`` — runtime data, gitignored
+  - Per-host ``<agentry-secrets-dir>/.env`` — secrets only (GITHUB_TOKEN etc.)
+
+The .env file is the only thing Agentry reads from the host. Everything
+else lives inside the target repo.
 """
 
 from __future__ import annotations
@@ -30,16 +38,42 @@ from pydantic import ValidationError
 from agentry.config import (
     bundled_default_config_path,
     bundled_default_role_path,
-    load_host_config,
+    host_env_file,
+    host_secrets_dir,
     load_target_config,
     role_rule_path,
+    target_logs_dir,
 )
-from agentry.github import gh_available, init_labels, list_labels, repo_exists
+from agentry.github import gh_available, init_labels as gh_init_labels, list_labels, repo_exists
 from agentry.notify import DiscordNotifier
 from agentry.orchestrator import Orchestrator
 from agentry.version import __version__
 
 logger = logging.getLogger("agentry")
+
+
+def _load_env_file() -> None:
+    """Load secrets from the host's .env into os.environ.
+
+    Idempotent and silent. Lines like ``KEY=value`` are parsed; comments
+    and blank lines are skipped. Existing env vars are NOT overwritten —
+    explicit shell exports take precedence.
+    """
+    env_path = host_env_file()
+    if not env_path.is_file():
+        return
+    try:
+        for line in env_path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            key = key.strip()
+            value = value.strip().strip('"').strip("'")
+            if key and key not in os.environ:
+                os.environ[key] = value
+    except OSError as e:
+        logger.warning("could not read %s: %s", env_path, e)
 
 
 @click.group(invoke_without_command=False)
@@ -54,6 +88,7 @@ def cli(ctx: click.Context, verbose: bool) -> None:
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
     ctx.ensure_object(dict)
+    _load_env_file()
 
 
 # -----------------------------------------------------------------------------
@@ -71,11 +106,12 @@ def cli(ctx: click.Context, verbose: bool) -> None:
 )
 @click.option(
     "--init-labels",
+    "init_labels_flag",
     is_flag=True,
     help="Create the standard labels in the target repo on GitHub.",
 )
-def doctor(target_path: Path, init_labels: bool) -> None:  # noqa: PLR0915
-    """Validate that the target repo + host config + CLIs are operable."""
+def doctor(target_path: Path, init_labels_flag: bool) -> None:  # noqa: PLR0915
+    """Validate that the target repo + secrets + CLIs are operable."""
     ok = True
 
     # 1. Target config (or bundled default).
@@ -90,7 +126,10 @@ def doctor(target_path: Path, init_labels: bool) -> None:  # noqa: PLR0915
 
     using_bundled = not (target_path / ".agentry" / "config.yml").is_file()
     if using_bundled:
-        click.secho("INFO  using bundled standard 6-role config (no .agentry/config.yml in target)", fg="cyan")
+        click.secho(
+            "INFO  using bundled standard 6-role config (no .agentry/config.yml in target)",
+            fg="cyan",
+        )
     else:
         click.secho("OK    .agentry/config.yml present and valid", fg="green")
 
@@ -115,16 +154,26 @@ def doctor(target_path: Path, init_labels: bool) -> None:  # noqa: PLR0915
                 fg="yellow",
             )
 
-    # 4. Host config.
-    try:
-        host_config = load_host_config()
-        click.secho(f"OK    host config loaded; state_dir={host_config.state_dir}", fg="green")
-    except (ValidationError, ValueError) as e:
-        click.secho(f"FAIL  host config invalid:\n{e}", fg="red")
-        ok = False
-        host_config = None  # type: ignore[assignment]
+    # 4. Secrets file.
+    env_path = host_env_file()
+    if env_path.is_file():
+        click.secho(f"OK    secrets file present: {env_path}", fg="green")
+    else:
+        click.secho(
+            f"WARN  no secrets file at {env_path}; agents will lack GITHUB_TOKEN, "
+            f"DISCORD_WEBHOOK_URL, etc. (run the install script or copy .env.example)",
+            fg="yellow",
+        )
 
-    # 5. gh CLI / target repo.
+    # 5. Per-target runtime dir.
+    state_dir = target_path / ".agentry"
+    if not state_dir.exists():
+        click.secho(
+            f"INFO  {state_dir} will be created on first run for logs/ and state/",
+            fg="cyan",
+        )
+
+    # 6. gh CLI / target repo.
     if gh_available():
         if repo_exists(target_config.target_repo):
             click.secho(f"OK    gh sees {target_config.target_repo}", fg="green")
@@ -134,10 +183,13 @@ def doctor(target_path: Path, init_labels: bool) -> None:  # noqa: PLR0915
                 fg="yellow",
             )
     else:
-        click.secho("WARN  gh CLI not on PATH; agents won't be able to manage labels/PRs", fg="yellow")
+        click.secho(
+            "WARN  gh CLI not on PATH; agents won't be able to manage labels/PRs",
+            fg="yellow",
+        )
 
-    # 6. Optional --init-labels.
-    if init_labels:
+    # 7. Optional --init-labels.
+    if init_labels_flag:
         if not gh_available():
             click.secho("FAIL  cannot init labels: gh not on PATH", fg="red")
             sys.exit(2)
@@ -147,7 +199,7 @@ def doctor(target_path: Path, init_labels: bool) -> None:  # noqa: PLR0915
         for name in STANDARD_LABELS:
             if name in existing:
                 click.secho(f"OK    label {name!r} already present", fg="green")
-        results = init_labels(target_config.target_repo)
+        results = gh_init_labels(target_config.target_repo)
         for name, success in results.items():
             color = "green" if success else "red"
             click.secho(f"{'OK   ' if success else 'FAIL '} create label {name!r}", fg=color)
@@ -185,8 +237,6 @@ def init(template: str, target_path: Path, force: bool) -> None:
 
     template_pkg = "agentry.defaults.standard"
     if template == "medical-device":
-        # Medical-device template lives in docs/examples/, not bundled into
-        # the package today. Operators can copy it manually until v0.2.
         click.secho(
             "medical-device template is documentation-only in v0.1.\n"
             "Copy from https://github.com/vinu-dev/agentry/tree/main/docs/examples/medical-device manually.",
@@ -197,8 +247,18 @@ def init(template: str, target_path: Path, force: bool) -> None:
     src_root = files(template_pkg)
     written: list[Path] = []
     for src in src_root.iterdir():
-        # Walk the template, mirroring its structure into target_path.
         _copy_resource_into(src, target_path, src_root, force=force, written=written)
+
+    # Always also write a .gitignore inside .agentry/ so the operator's
+    # logs and state never accidentally get committed.
+    gitignore_path = target_path / ".agentry" / ".gitignore"
+    if not gitignore_path.exists() or force:
+        gitignore_path.parent.mkdir(parents=True, exist_ok=True)
+        gitignore_path.write_text(
+            "# Agentry runtime data — never commit\nlogs/\nstate/\n",
+            encoding="utf-8",
+        )
+        written.append(gitignore_path)
 
     click.secho(f"\nWrote {len(written)} file(s) into {target_path}", fg="green")
     for p in written:
@@ -213,19 +273,11 @@ def _copy_resource_into(src, target_root: Path, root, *, force: bool, written: l
         return
 
     rel = Path(str(src)).relative_to(str(root))
-    # The standard template ships .agentry/config.yml + roles/*.md.
-    # We want them at:
-    #   <target>/.agentry/config.yml
-    #   <target>/docs/ai/roles/<role>.md
-    # The bundle on disk is laid out as:
-    #   defaults/standard/config.yml
-    #   defaults/standard/roles/<role>.md
     if rel.name == "config.yml" and len(rel.parts) == 1:
         dst = target_root / ".agentry" / "config.yml"
     elif rel.parts[0] == "roles":
         dst = target_root / "docs" / "ai" / "roles" / Path(*rel.parts[1:])
     else:
-        # Unknown bundled file — copy verbatim as a sibling of .agentry/.
         dst = target_root / rel
 
     if dst.exists() and not force:
@@ -254,29 +306,24 @@ def start(target_path: Path) -> None:
     """Start the orchestrator in foreground (use service install for daemon mode)."""
     target_path = target_path.resolve()
     target_config = load_target_config(target_path)
-    host_config = load_host_config()
 
-    webhook_env = host_config.discord_webhook_env
-    webhook_url = os.environ.get(webhook_env) or None
+    webhook_url = os.environ.get("DISCORD_WEBHOOK_URL") or None
     if not webhook_url:
         click.secho(
-            f"WARN  {webhook_env} not set; Discord notifications will be dropped",
-            fg="yellow",
+            "INFO  DISCORD_WEBHOOK_URL not set; notifications will go to logs only "
+            "(see <target>/.agentry/logs/)",
+            fg="cyan",
         )
 
-    notifier = DiscordNotifier(
-        webhook_url=webhook_url, flush_seconds=host_config.batch_notify_seconds
-    )
+    notifier = DiscordNotifier(webhook_url=webhook_url, flush_seconds=60)
     notifier.start()
 
     orch = Orchestrator(
         target_config=target_config,
-        host_config=host_config,
         target_path=target_path,
         notifier=notifier,
     )
 
-    # Set up SIGTERM/SIGINT handlers in the main thread.
     def handle_signal(signum: int, _frame) -> None:
         logger.info("received signal %d; shutting down", signum)
         orch.shutdown()
@@ -285,13 +332,12 @@ def start(target_path: Path) -> None:
         try:
             signal.signal(sig, handle_signal)
         except (ValueError, OSError):
-            # Some platforms don't allow setting signal handlers from
-            # non-main threads. We're in the main thread here so this
-            # should rarely fail, but be tolerant just in case.
             pass
 
     click.secho(
-        f"agentry started for {target_config.target_repo} ({len(target_config.agents)} roles)",
+        f"agentry started for {target_config.target_repo} ({len(target_config.agents)} roles)\n"
+        f"  target:   {target_path}\n"
+        f"  logs:     {target_path / '.agentry' / 'logs'}",
         fg="green",
     )
     orch.start()
@@ -313,18 +359,14 @@ def start(target_path: Path) -> None:
     default=Path.cwd(),
 )
 def status(target_path: Path) -> None:
-    """Show recent orchestrator activity by reading log files.
-
-    v0.1 status is read-only via the filesystem; for live IPC we'd need a
-    socket and a richer protocol — deferred.
-    """
+    """Show recent orchestrator activity by reading log files."""
     target_path = target_path.resolve()
     target_config = load_target_config(target_path)
-    host_config = load_host_config()
-    log_root = host_config.state_dir / "logs"
+    log_root = target_logs_dir(target_path)
 
-    click.echo(f"target: {target_config.target_repo}")
-    click.echo(f"state_dir: {host_config.state_dir}")
+    click.echo(f"target:    {target_config.target_repo}")
+    click.echo(f"path:      {target_path}")
+    click.echo(f"logs:      {log_root}")
     click.echo(f"roles ({len(target_config.agents)}):")
 
     for role in sorted(target_config.agents):
@@ -332,11 +374,12 @@ def status(target_path: Path) -> None:
         if not role_logs.is_dir():
             click.secho(f"  {role}: no log dir yet", fg="yellow")
             continue
-        latest = sorted(role_logs.glob("*.log"))[-3:] if any(role_logs.iterdir()) else []
-        if not latest:
+        all_logs = sorted(role_logs.glob("*.log"))
+        if not all_logs:
             click.secho(f"  {role}: no runs yet", fg="yellow")
             continue
-        click.echo(f"  {role}: {len(list(role_logs.glob('*.log')))} runs total")
+        latest = all_logs[-3:]
+        click.echo(f"  {role}: {len(all_logs)} runs total")
         for p in latest:
             size = p.stat().st_size
             click.echo(f"    └─ {p.name} ({size} bytes)")
@@ -390,8 +433,11 @@ def service_uninstall() -> None:
 
 @cli.command("default-paths")
 def default_paths() -> None:
-    """Print the on-disk paths of the bundled default config + role files."""
-    click.echo(f"config:    {bundled_default_config_path()}")
+    """Print the on-disk paths of the bundled default config + role files
+    and the host secrets file location."""
+    click.echo(f"host secrets dir:  {host_secrets_dir()}")
+    click.echo(f"host .env file:    {host_env_file()}")
+    click.echo(f"bundled config:    {bundled_default_config_path()}")
     for role in (
         "researcher",
         "architect",

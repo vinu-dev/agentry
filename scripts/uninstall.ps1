@@ -21,9 +21,8 @@
     sign out, run `claude logout` and `codex logout` separately.
 
 .PARAMETER KeepConfig
-    Keep %USERPROFILE%\Agentry\.env and pipeline.local.toml. Useful for
-    reinstalling without losing your secrets / settings. State and logs
-    are still removed.
+    Keep %USERPROFILE%\Agentry\.env. Useful for reinstalling without
+    re-typing your secrets. By default, .env is removed.
 
 .PARAMETER RemoveDeps
     Also winget-uninstall Node.js and NSSM. Off by default since other
@@ -120,20 +119,26 @@ if (Test-Command 'npm') {
 $ag = Join-Path $env:USERPROFILE 'Agentry'
 $ag_legacy = Join-Path $env:USERPROFILE '.agentry'
 
-Write-Step "Cleaning up user data folder"
+Write-Step "Cleaning up host secrets folder"
 
 if ($KeepConfig) {
-    # Preserve .env and pipeline.local.toml; remove only state/logs.
-    foreach ($sub in @('state', 'logs', 'workspaces')) {
-        $p = Join-Path $ag $sub
-        if (Test-Path $p) {
-            Remove-Item -Recurse -Force $p
-            Write-OK "removed $p"
+    # Preserve .env; remove anything else (e.g. legacy state/logs from old
+    # versions that put them at host level).
+    if (Test-Path $ag) {
+        foreach ($sub in @('state', 'logs', 'workspaces', 'pipeline.local.toml')) {
+            $p = Join-Path $ag $sub
+            if (Test-Path $p) {
+                Remove-Item -Recurse -Force $p
+                Write-OK "removed $p (legacy)"
+            }
+        }
+        $envPath = Join-Path $ag '.env'
+        if (Test-Path $envPath) {
+            Write-OK "kept $envPath (-KeepConfig)"
         }
     }
-    Write-OK "kept $ag\.env and $ag\pipeline.local.toml (-KeepConfig)"
     if (Test-Path $ag_legacy) {
-        Write-Warn "legacy $ag_legacy still present; remove manually if not in use"
+        Write-Warn "legacy $ag_legacy still present from older install; remove manually if not in use"
     }
 } else {
     foreach ($d in @($ag, $ag_legacy)) {
@@ -145,6 +150,10 @@ if ($KeepConfig) {
         }
     }
 }
+
+# Note: per-target .agentry/{logs,state}/ folders inside your target repos
+# are NOT touched. Those are part of your project; if you want to clean them,
+# you do it per-repo (or just `git clean -fdx .agentry/`).
 
 # -----------------------------------------------------------------------------
 # 5. Optionally remove Node.js + NSSM (-RemoveDeps)
@@ -189,12 +198,17 @@ Write-Host "`n=== Uninstall complete ===" -ForegroundColor Green
 if (-not $KeepConfig) {
     Write-Host @"
 
-What was removed:
+What was removed (host-level):
   - The agentry Windows Service (if registered)
   - The agentry Python package
   - The npm globals @anthropic-ai/claude-code and @openai/codex
-  - $ag (your user data folder)
+  - $ag (your secrets folder, including .env)
   - $ag_legacy (legacy folder from old installs, if present)
+
+What was NOT touched:
+  - <target>\.agentry\{config.yml,logs,state} folders inside your target
+    repos — those are part of each repo and you manage them with git
+    (e.g. `git clean -fdx .agentry/`).
 "@ -ForegroundColor Cyan
 } else {
     Write-Host @"
@@ -203,11 +217,12 @@ What was removed:
   - The agentry Windows Service
   - The agentry Python package
   - The npm globals @anthropic-ai/claude-code and @openai/codex
-  - $ag\state, $ag\logs, $ag\workspaces
 
 What was KEPT (per -KeepConfig):
-  - $ag\.env
-  - $ag\pipeline.local.toml
+  - $ag\.env  (your secrets — for easy reinstall)
+
+What was NOT touched:
+  - <target>\.agentry\ folders inside your target repos
 "@ -ForegroundColor Cyan
 }
 

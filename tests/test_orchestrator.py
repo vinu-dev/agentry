@@ -3,7 +3,7 @@
 Spawns one role thread with a stub CLI and confirms the loop:
   - reads the per-role prompt OR the framework-generated one
   - spawns the subprocess in the right working directory
-  - logs the run
+  - logs the run inside <target>/.agentry/logs/<role>/
   - sleeps until the shutdown event fires
   - exits cleanly
 
@@ -14,13 +14,10 @@ test_notify.py. We use a no-webhook notifier so events are silently dropped.
 from __future__ import annotations
 
 import sys
-import threading
 import time
 from pathlib import Path
 
-import pytest
-
-from agentry.config import AgentConfig, HostConfig, TargetConfig
+from agentry.config import AgentConfig, TargetConfig, target_logs_dir
 from agentry.notify import DiscordNotifier
 from agentry.orchestrator import Orchestrator
 
@@ -46,12 +43,10 @@ def _make_orchestrator(
             ),
         },
     )
-    host_config = HostConfig(state_dir=tmp_path / "state")
     notifier = DiscordNotifier(webhook_url=None, flush_seconds=10)
     notifier.start()
     return Orchestrator(
         target_config=target_config,
-        host_config=host_config,
         target_path=tmp_path,
         notifier=notifier,
     )
@@ -64,8 +59,8 @@ class TestOrchestrator:
         try:
             orch.start()
 
-            # Wait for the log to appear (one iteration completed).
-            log_dir = orch.host_config.state_dir / "logs" / "tester"
+            # Logs live inside the target — <tmp_path>/.agentry/logs/tester/
+            log_dir = target_logs_dir(tmp_path) / "tester"
             deadline = time.monotonic() + 30.0
             while time.monotonic() < deadline:
                 if log_dir.is_dir() and any(log_dir.glob("*.log")):
@@ -79,14 +74,10 @@ class TestOrchestrator:
             assert "one iteration done" in content
         finally:
             orch.shutdown()
-            # Don't call wait() — it would block on the role thread sleeping.
-            # Daemon thread will die with the process.
             orch.notifier.stop(timeout=2.0)
 
     def test_uses_per_role_prompt_when_set(self, tmp_path: Path):
         """When AgentConfig.prompt is set, that string is sent to stdin verbatim."""
-        # We use python's interactive flag to echo stdin to stdout.
-        # That way we can verify which prompt was passed in.
         prompt_text = "CUSTOM PROMPT FROM CONFIG\n"
         target_config = TargetConfig(
             target_repo="test/repo",
@@ -94,29 +85,27 @@ class TestOrchestrator:
                 "tester": AgentConfig(
                     cli=sys.executable,
                     args=["-c", "import sys; sys.stdout.write(sys.stdin.read())"],
-                    interval_min=60,  # long enough that we only see one iteration
+                    interval_min=60,
                     total_min=1,
                     stall_min=1,
                     prompt=prompt_text,
                 ),
             },
         )
-        host_config = HostConfig(state_dir=tmp_path / "state")
         notifier = DiscordNotifier(webhook_url=None, flush_seconds=10)
         notifier.start()
         orch = Orchestrator(
             target_config=target_config,
-            host_config=host_config,
             target_path=tmp_path,
             notifier=notifier,
         )
         try:
             orch.start()
-            log_dir = orch.host_config.state_dir / "logs" / "tester"
+            log_dir = target_logs_dir(tmp_path) / "tester"
             deadline = time.monotonic() + 30.0
             while time.monotonic() < deadline:
                 if log_dir.is_dir() and any(log_dir.glob("*.log")):
-                    time.sleep(0.5)  # let the file finish writing
+                    time.sleep(0.5)
                     break
                 time.sleep(0.5)
             logs = list(log_dir.glob("*.log"))
@@ -134,11 +123,7 @@ class TestOrchestrator:
             orch.start()
             time.sleep(2.0)
             orch.shutdown()
-            # Threads are daemons; wait briefly to give them a chance to exit.
             for t in orch._threads:
                 t.join(timeout=10.0)
-            # We can't strictly assert is_alive() == False on daemon threads
-            # joined with timeout, but if they're still alive after a wait
-            # event, something is wrong with the shutdown logic.
         finally:
             orch.notifier.stop(timeout=2.0)

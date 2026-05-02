@@ -69,8 +69,7 @@ The framework prompts are generic ("read `docs/ai/roles/X.md` and follow it"). T
 
 Templates:
 
-- **[`pipeline.example.toml`](pipeline.example.toml)** — per-host config template
-- **[`.env.example`](.env.example)** — secrets template
+- **[`.env.example`](.env.example)** — secrets template (the only host-level file)
 
 ## What works today
 
@@ -97,7 +96,7 @@ The installer is idempotent and installs everything Agentry needs:
 - `agentry` itself (via `pipx` on Linux, `pip --user` on Windows)
 - `claude` (Claude Code) and `codex` (OpenAI Codex CLI) via npm
 - NSSM on Windows (only needed if you'll use `agentry service install`)
-- Your Agentry data folder (`%USERPROFILE%\Agentry\` on Windows, `~/.agentry/` on Linux) with template `.env` and `pipeline.local.toml`
+- Your host secrets folder (`%USERPROFILE%\Agentry\` on Windows, `~/.agentry/` on Linux) with a template `.env` (just one folder — only the secrets file lives here; everything else lives in your target repos)
 
 The installer does **not** do anything that requires your credentials:
 
@@ -130,34 +129,50 @@ Then configure the target with `.agentry/config.yml` + role rule files (or use t
 
 ### Watching what it does
 
-Every role's stdout is logged per-run under your Agentry data folder:
+Every role's stdout is logged per-run inside your target repo:
 
 ```
-Windows: %USERPROFILE%\Agentry\logs\<role>\<timestamp>.log
-Linux:   ~/.agentry/logs/<role>/<timestamp>.log
+<target-repo>/.agentry/logs/<role>/<timestamp>.log
 ```
 
-That's the default — no external service required. If you want push notifications when an agent stalls or finishes, configure one of the optional channels in `.env` (Discord webhook today; Telegram + email in v0.2+).
+Tail the latest run live with `tail -f`, or run `agentry status` to see a per-role summary. No external service required.
 
-## Where Agentry stores your data
+If you want push notifications when an agent stalls or finishes, configure `DISCORD_WEBHOOK_URL` in your host `.env` (Telegram + email come in v0.2+).
 
-A single dedicated folder per user:
+## Where your data lives — gtest-style, in your target repo
 
-| Platform | Location | Visible? |
-|----------|----------|----------|
-| Windows | `%USERPROFILE%\Agentry\` (e.g. `C:\Users\you\Agentry\`) | yes — easy to find in Explorer |
-| Linux/macOS | `~/.agentry/` | conventional Unix dot-folder |
-
-That folder contains:
+Everything Agentry writes lives **inside the target repo's own `.agentry/` directory**, alongside your code. Each repo carries its own activity history with it; nothing scattered in your home directory.
 
 ```
-.env                      # your secrets — fill in by hand
-pipeline.local.toml       # host config
-state/                    # runtime state (heartbeats, etc.)
-logs/                     # per-role agent stdout/stderr
+<your-target-repo>/                       ← e.g. rpi-home-monitor
+├── .agentry/
+│   ├── config.yml                        ← committed: agent assignments + sensitive paths
+│   ├── .gitignore                        ← committed: ignores logs/ + state/
+│   ├── logs/                             ← gitignored: per-role agent stdout
+│   │   ├── researcher/
+│   │   ├── architect/
+│   │   ├── implementer/
+│   │   ├── tester/
+│   │   ├── reviewer/
+│   │   └── release/
+│   └── state/                            ← gitignored: runtime state
+└── docs/ai/roles/                        ← committed: per-role rule files
+    ├── researcher.md
+    ├── architect.md
+    ├── implementer.md
+    ├── tester.md
+    ├── reviewer.md
+    └── release.md
 ```
 
-Nothing scattered elsewhere. To wipe Agentry from a host, see "Uninstall" below.
+The **only** thing Agentry stores at the host level is your secrets:
+
+| Platform | Path | Contents |
+|----------|------|----------|
+| Windows | `%USERPROFILE%\Agentry\.env` | `GITHUB_TOKEN`, optional API keys + Discord webhook |
+| Linux/macOS | `~/.agentry/.env` | same |
+
+That's it. No separate state dir, no scattered logs, no `pipeline.local.toml`. Just the secrets file at the host level (because secrets must NOT live in git), and everything else inside the target repo where it belongs.
 
 ## Uninstall
 
