@@ -216,3 +216,27 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# -----------------------------------------------------------------------------
+# Skynet Agentry — runtime artifacts
+# -----------------------------------------------------------------------------
+
+# Machine-specific config — copied from pipeline.example.toml
+pipeline.local.toml
+
+# Runtime state — sqlite db, heartbeats, logs
+state/
+
+# Per-task workspaces — fresh clones of target repos, recycled after task completes
+workspace/
+
+# Release artifacts (v1+)
+*.swu
+*.swu.sig
+
+# Private keys and signing material — defense-in-depth on top of `.env` rule
+*.pem
+*.key
+*.kdf
+id_rsa
+id_ed25519
