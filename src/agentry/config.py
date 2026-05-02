@@ -2,7 +2,9 @@
 
 Two layers:
   - Per-target ``.agentry/config.yml`` in the target repository
-  - Per-host ``pipeline.local.toml`` in ``~/.agentry/``
+  - Per-host ``pipeline.local.toml`` in the user's Agentry directory:
+      Windows: ``%USERPROFILE%\\Agentry\\`` (visible folder)
+      Linux/macOS: ``~/.agentry/``  (Unix dot-folder convention)
 
 The framework also ships **bundled defaults** for the standard 6-role roster.
 A target that provides nothing falls back to those defaults so operators can
@@ -12,13 +14,13 @@ start with zero setup.
 from __future__ import annotations
 
 import os
+import sys
 import tomllib
 from importlib.resources import files
 from pathlib import Path
 
 import yaml
 from pydantic import BaseModel, Field, ValidationError, field_validator
-from platformdirs import user_config_dir
 
 
 # -----------------------------------------------------------------------------
@@ -96,6 +98,26 @@ class HostConfig(BaseModel):
 DEFAULTS_PACKAGE = "agentry.defaults.standard"
 
 
+def agentry_user_dir() -> Path:
+    """Return the per-user Agentry root directory.
+
+    On Windows this is ``%USERPROFILE%\\Agentry\\`` — a visible folder under
+    your user profile so it's easy to find in Explorer. On Linux/macOS it's
+    ``~/.agentry/`` — the conventional Unix dot-folder for tool config.
+
+    All Agentry runtime data lives under this single root:
+      - .env                   (secrets)
+      - pipeline.local.toml    (host config)
+      - state/                 (heartbeats, sqlite, etc. — currently unused)
+      - logs/                  (per-role subprocess output)
+      - workspaces/            (reserved for v1+ multi-target clones)
+    """
+    home = Path.home()
+    if sys.platform == "win32":
+        return home / "Agentry"
+    return home / ".agentry"
+
+
 def bundled_default_config_path() -> Path:
     """Path to the bundled standard 6-role config file shipped with the package."""
     return Path(str(files(DEFAULTS_PACKAGE).joinpath("config.yml")))
@@ -140,19 +162,19 @@ def load_target_config(target_path: Path | str) -> TargetConfig:
 def load_host_config(path: Path | str | None = None) -> HostConfig:
     """Load and validate the per-host ``pipeline.local.toml``.
 
-    When ``path`` is None, looks for ``<user_config_dir>/agentry/pipeline.local.toml``.
+    When ``path`` is None, looks for ``<agentry_user_dir>/pipeline.local.toml``.
     Falls back to in-memory defaults if the file doesn't exist.
     """
+    user_dir = agentry_user_dir()
+
     if path is None:
-        host_path = Path(user_config_dir("agentry", appauthor=False)) / "pipeline.local.toml"
+        host_path = user_dir / "pipeline.local.toml"
     else:
         host_path = Path(path)
 
     if not host_path.is_file():
         # Defaults — operator can run with no config file at all.
-        return HostConfig(
-            state_dir=Path(user_config_dir("agentry", appauthor=False)) / "state",
-        )
+        return HostConfig(state_dir=user_dir / "state")
 
     with host_path.open("rb") as f:
         raw = tomllib.load(f)
@@ -168,9 +190,7 @@ def load_host_config(path: Path | str | None = None) -> HostConfig:
     }
     flat = {k: v for k, v in flat.items() if v is not None}
     if "state_dir" not in flat:
-        flat["state_dir"] = (
-            Path(user_config_dir("agentry", appauthor=False)) / "state"
-        )
+        flat["state_dir"] = user_dir / "state"
     return HostConfig.model_validate(flat)
 
 
@@ -203,6 +223,7 @@ __all__ = [
     "HostConfig",
     "TargetConfig",
     "ValidationError",
+    "agentry_user_dir",
     "bundled_default_config_path",
     "bundled_default_role_path",
     "load_host_config",

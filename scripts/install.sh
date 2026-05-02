@@ -231,8 +231,10 @@ fi
 # 5. ~/.agentry/ host config + templates
 # -----------------------------------------------------------------------------
 
-step "Setting up ~/.agentry/"
+step "Setting up Agentry user directory"
 
+# Linux uses ~/.agentry/ (Unix dot-folder convention).
+# Windows uses %USERPROFILE%\Agentry\ (visible folder) — handled in install.ps1.
 AGENTRY_DIR="$HOME/.agentry"
 mkdir -p "$AGENTRY_DIR" "$AGENTRY_DIR/state" "$AGENTRY_DIR/logs"
 ok "ensured $AGENTRY_DIR + state/ + logs/"

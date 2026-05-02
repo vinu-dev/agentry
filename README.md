@@ -111,7 +111,11 @@ Those steps are listed at the end of the install run.
 ```bash
 claude login                                  # opens browser, links your subscription
 codex login                                   # same for ChatGPT
-$EDITOR ~/.agentry/.env                       # fill in GITHUB_TOKEN + DISCORD_WEBHOOK_URL
+
+# Fill in your secrets:
+#   Windows: %USERPROFILE%\Agentry\.env
+#   Linux:   ~/.agentry/.env
+$EDITOR <agentry-dir>/.env                    # fill in GITHUB_TOKEN + DISCORD_WEBHOOK_URL
 
 cd <your-target-repo>
 agentry doctor --init-labels                  # creates the 6 GitHub labels in the target
@@ -121,6 +125,46 @@ agentry service install                       # always-on (systemd / NSSM)
 ```
 
 Then configure the target with `.agentry/config.yml` + role rule files (or use the bundled defaults), and `agentry target add --repo <url>` if running with the service.
+
+## Where Agentry stores your data
+
+A single dedicated folder per user:
+
+| Platform | Location | Visible? |
+|----------|----------|----------|
+| Windows | `%USERPROFILE%\Agentry\` (e.g. `C:\Users\you\Agentry\`) | yes — easy to find in Explorer |
+| Linux/macOS | `~/.agentry/` | conventional Unix dot-folder |
+
+That folder contains:
+
+```
+.env                      # your secrets — fill in by hand
+pipeline.local.toml       # host config
+state/                    # runtime state (heartbeats, etc.)
+logs/                     # per-role agent stdout/stderr
+```
+
+Nothing scattered elsewhere. To wipe Agentry from a host, see "Uninstall" below.
+
+## Uninstall
+
+```powershell
+# Windows
+iwr -useb https://raw.githubusercontent.com/vinu-dev/agentry/main/scripts/uninstall.ps1 | iex
+```
+
+```bash
+# Linux
+curl -fsSL https://raw.githubusercontent.com/vinu-dev/agentry/main/scripts/uninstall.sh | bash
+```
+
+By default the uninstaller removes:
+- The Windows Service / systemd unit (if registered)
+- The agentry Python package
+- Both LLM CLI npm globals (`@anthropic-ai/claude-code`, `@openai/codex`)
+- Your Agentry user data folder (`Agentry\` or `.agentry/`)
+
+It keeps Node.js and NSSM by default since other tools may use them. Pass `-RemoveDeps` (Windows) or `--remove-deps` (Linux) to also remove those. Pass `-KeepConfig` / `--keep-config` to preserve `.env` and `pipeline.local.toml` for a future reinstall.
 
 ## License
 

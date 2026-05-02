@@ -242,9 +242,11 @@ if (-not $SkipNssm) {
 # 7. ~/.agentry/ host config + templates
 # -----------------------------------------------------------------------------
 
-Write-Step "Setting up ~/.agentry/ host config"
+Write-Step "Setting up Agentry user directory ($env:USERPROFILE\Agentry)"
 
-$agentryDir = Join-Path $env:USERPROFILE '.agentry'
+# Visible folder under user profile so it's easy to find in Explorer.
+# Linux uses the dot-folder convention; Windows uses a regular folder.
+$agentryDir = Join-Path $env:USERPROFILE 'Agentry'
 $stateDir = Join-Path $agentryDir 'state'
 $logsDir = Join-Path $agentryDir 'logs'
 foreach ($d in @($agentryDir, $stateDir, $logsDir)) {
@@ -332,6 +334,11 @@ if ($verifyOk) {
 # -----------------------------------------------------------------------------
 
 Write-Host @"
+
+Your Agentry data folder: $agentryDir
+This is where your secrets, host config, logs, and state live. To uninstall
+later, run scripts/uninstall.ps1 — it removes this folder (and the service,
+and the npm globals) cleanly.
 
 Next steps (you must do these — they need your browser / credentials):
 
