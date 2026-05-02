@@ -76,15 +76,51 @@ Templates:
 
 Nothing runs yet. v0.0a is the spec — design only, no code. The runtime ships in v0.1.
 
-## Install (when v0.1 ships)
+## Install (one-liner)
 
-```bash
-uv tool install --from git+ssh://git@github.com/vinu-dev/agentry.git agentry
-agentry --version
-agentry service install                    # systemd or NSSM
+### Windows (PowerShell)
+
+```powershell
+iwr -useb https://raw.githubusercontent.com/vinu-dev/agentry/main/scripts/install.ps1 | iex
 ```
 
-Then configure a target repo with `.agentry/config.yml` + role rule files, and `agentry target add --repo <url>`.
+### Linux
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/vinu-dev/agentry/main/scripts/install.sh | bash
+```
+
+The installer is idempotent and installs everything Agentry needs:
+
+- Python 3.11+ (only if missing)
+- Node.js LTS (only if missing) — required for the LLM CLIs
+- `agentry` itself (via `pipx` on Linux, `pip --user` on Windows)
+- `claude` (Claude Code) and `codex` (OpenAI Codex CLI) via npm
+- NSSM on Windows (only needed if you'll use `agentry service install`)
+- `~/.agentry/` directory with template `.env` and `pipeline.local.toml`
+
+The installer does **not** do anything that requires your credentials:
+
+- It does not run `claude login` / `codex login` (those open your browser)
+- It does not fill in API keys / Discord webhook / GitHub PAT in your `.env`
+
+Those steps are listed at the end of the install run.
+
+### After install
+
+```bash
+claude login                                  # opens browser, links your subscription
+codex login                                   # same for ChatGPT
+$EDITOR ~/.agentry/.env                       # fill in GITHUB_TOKEN + DISCORD_WEBHOOK_URL
+
+cd <your-target-repo>
+agentry doctor --init-labels                  # creates the 6 GitHub labels in the target
+agentry start                                  # foreground (Ctrl-C to stop)
+# OR
+agentry service install                       # always-on (systemd / NSSM)
+```
+
+Then configure the target with `.agentry/config.yml` + role rule files (or use the bundled defaults), and `agentry target add --repo <url>` if running with the service.
 
 ## License
 
