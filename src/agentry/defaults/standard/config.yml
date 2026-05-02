@@ -1,16 +1,17 @@
 # Agentry — bundled standard 6-role default configuration
 # =============================================================================
 #
-# This is the config Agentry uses when a target repo doesn't provide its own
-# .agentry/config.yml. It's also what `agentry init` copies into a target.
+# When a target repo doesn't ship its own agentry/config.yml, Agentry runs
+# with this file. It's also the file `scripts/add-to-target` writes into a
+# new target's agentry/ folder so the operator can edit it.
 #
-# Each role has a minimal prompt that mentions the parallel-pipeline context
-# and points the agent at its rule file in docs/ai/roles/<role>.md. If you
-# delete the `prompt:` line, the framework falls back to a longer generic
-# template (see src/agentry/prompt.py) that explains the same pattern in
-# more detail.
+# The `prompt:` field on each role is what the LLM CLI receives on stdin.
+# The prompt points the agent at docs/ai/roles/<role>.md in the TARGET
+# repository — not in agentry/. That's the standard "rule files live in
+# the host repo" pattern. Edit those rule files for project-specific
+# instructions; this config.yml is for picking which model handles what.
 
-target_repo: <owner>/<repo>           # operator overrides in their target repo
+target_repo: <owner>/<repo>           # filled in by `add-to-target` per repo
 
 agents:
 
@@ -21,10 +22,8 @@ agents:
     total_min: 30
     stall_min: 5
     prompt: |
-      You are the Researcher in a parallel multi-agent pipeline. Other roles
-      (architect, implementer, tester, reviewer, release) run concurrently
-      with you. Read docs/ai/roles/researcher.md and follow it. If that file
-      doesn't exist, exit with error.
+      You are the Researcher. Read docs/ai/roles/researcher.md and follow it.
+      If that file doesn't exist, exit with error.
 
   architect:
     cli: claude
@@ -33,34 +32,25 @@ agents:
     total_min: 30
     stall_min: 5
     prompt: |
-      You are the Architect in a parallel multi-agent pipeline. Other roles
-      (researcher, implementer, tester, reviewer, release) run concurrently
-      with you. Read docs/ai/roles/architect.md and follow it. If that file
-      doesn't exist, exit with error.
+      You are the Architect. Read docs/ai/roles/architect.md and follow it.
 
   implementer:
-    cli: codex                        # or claude — operator's choice
+    cli: codex
     args: ["--auto-approve"]
     interval_min: 5
     total_min: 60
     stall_min: 10
     prompt: |
-      You are the Implementer in a parallel multi-agent pipeline. Other roles
-      (researcher, architect, tester, reviewer, release) run concurrently with
-      you. Read docs/ai/roles/implementer.md and follow it. If that file
-      doesn't exist, exit with error.
+      You are the Implementer. Read docs/ai/roles/implementer.md and follow it.
 
   tester:
     cli: claude
     args: ["-p", "--dangerously-skip-permissions"]
     interval_min: 5
-    total_min: 30                     # raise to 60+ if rule file includes hardware steps
+    total_min: 30
     stall_min: 10
     prompt: |
-      You are the Tester in a parallel multi-agent pipeline. Other roles
-      (researcher, architect, implementer, reviewer, release) run concurrently
-      with you. Read docs/ai/roles/tester.md and follow it. If that file
-      doesn't exist, exit with error.
+      You are the Tester. Read docs/ai/roles/tester.md and follow it.
 
   reviewer:
     cli: claude
@@ -69,24 +59,19 @@ agents:
     total_min: 20
     stall_min: 5
     prompt: |
-      You are the Reviewer in a parallel multi-agent pipeline. Other roles
-      (researcher, architect, implementer, tester, release) run concurrently
-      with you. Read docs/ai/roles/reviewer.md and follow it. If that file
-      doesn't exist, exit with error.
+      You are the Reviewer. Read docs/ai/roles/reviewer.md and follow it.
 
   release:
     cli: claude
     args: ["-p", "--dangerously-skip-permissions"]
-    interval_min: 1440                # daily
+    interval_min: 1440
     total_min: 60
     stall_min: 15
     prompt: |
-      You are the Release Engineer in a parallel multi-agent pipeline. Other
-      roles (researcher, architect, implementer, tester, reviewer) run
-      concurrently with you. Read docs/ai/roles/release.md and follow it. If
-      that file doesn't exist, exit with error.
+      You are the Release Engineer. Read docs/ai/roles/release.md and follow it.
 
 # Paths the Reviewer's rule file should treat as block-worthy.
+# Customize per your project — these are placeholders.
 sensitive_paths:
   - "**/auth/**"
   - "**/secrets/**"

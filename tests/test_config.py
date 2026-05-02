@@ -12,10 +12,11 @@ from agentry.config import (
     TargetConfig,
     bundled_default_config_path,
     bundled_default_role_path,
-    host_env_file,
-    host_secrets_dir,
     load_target_config,
     role_rule_path,
+    target_agentry_dir,
+    target_config_file,
+    target_env_file,
     target_logs_dir,
     target_state_dir,
 )
@@ -119,7 +120,7 @@ class TestBundledDefaults:
 
 class TestLoadTargetConfig:
     def test_target_with_local_config(self, tmp_path: Path):
-        agentry_dir = tmp_path / ".agentry"
+        agentry_dir = tmp_path / "agentry"
         agentry_dir.mkdir()
         (agentry_dir / "config.yml").write_text(
             """
@@ -142,32 +143,29 @@ agents:
             load_target_config(tmp_path / "does-not-exist")
 
     def test_malformed_yaml_rejected(self, tmp_path: Path):
-        agentry_dir = tmp_path / ".agentry"
+        agentry_dir = tmp_path / "agentry"
         agentry_dir.mkdir()
         (agentry_dir / "config.yml").write_text("- not a mapping\n", encoding="utf-8")
         with pytest.raises(ValueError, match="top-level YAML must be a mapping"):
             load_target_config(tmp_path)
 
 
-class TestHostPaths:
-    def test_host_secrets_dir_under_user_home(self):
-        p = host_secrets_dir()
-        assert p.parent == Path.home()
-        # Either ~/Agentry (Windows) or ~/.agentry (Linux/macOS)
-        assert p.name in {"Agentry", ".agentry"}
-
-    def test_host_env_file_inside_secrets_dir(self):
-        env = host_env_file()
-        assert env.parent == host_secrets_dir()
-        assert env.name == ".env"
-
-
 class TestTargetPaths:
+    def test_agentry_dir_is_visible(self, tmp_path: Path):
+        # Visible folder, not dot-prefixed.
+        assert target_agentry_dir(tmp_path) == tmp_path / "agentry"
+
+    def test_config_file_inside_agentry_dir(self, tmp_path: Path):
+        assert target_config_file(tmp_path) == tmp_path / "agentry" / "config.yml"
+
+    def test_env_file_inside_agentry_dir(self, tmp_path: Path):
+        assert target_env_file(tmp_path) == tmp_path / "agentry" / ".env"
+
     def test_state_and_logs_inside_target(self, tmp_path: Path):
-        assert target_state_dir(tmp_path) == tmp_path / ".agentry" / "state"
-        assert target_logs_dir(tmp_path) == tmp_path / ".agentry" / "logs"
+        assert target_state_dir(tmp_path) == tmp_path / "agentry" / "state"
+        assert target_logs_dir(tmp_path) == tmp_path / "agentry" / "logs"
 
     def test_paths_resolve_string_inputs(self, tmp_path: Path):
         # Should accept Path or str
-        assert target_state_dir(str(tmp_path)).parent == tmp_path / ".agentry"
-        assert target_logs_dir(str(tmp_path)).parent == tmp_path / ".agentry"
+        assert target_state_dir(str(tmp_path)).parent == tmp_path / "agentry"
+        assert target_logs_dir(str(tmp_path)).parent == tmp_path / "agentry"

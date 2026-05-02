@@ -1,25 +1,28 @@
 """Configuration loading and validation.
 
-Two locations:
-  - Per-target ``<target>/.agentry/config.yml``: agent assignments + sensitive
-    paths. Committed to the target repo. Logs and runtime state ALSO live in
-    ``<target>/.agentry/{logs,state}/`` (gitignored), so each target carries
-    its own activity history with it.
-  - Per-host ``<host-agentry-dir>/.env``: secrets only (GITHUB_TOKEN,
-    optional API keys, optional Discord webhook URL). NEVER committed.
+Everything Agentry uses lives INSIDE the target repository — gtest-style.
 
-      Windows: ``%USERPROFILE%\\Agentry\\.env``  (visible folder)
-      Linux/macOS: ``~/.agentry/.env``           (Unix dot-folder convention)
+Per target:
+  <target>/agentry/config.yml          agent assignments, prompts, sensitive paths (committed)
+  <target>/agentry/.env                secrets — GITHUB_TOKEN etc.        (gitignored)
+  <target>/agentry/logs/               per-role agent stdout              (gitignored)
+  <target>/agentry/state/              runtime state                      (gitignored)
+  <target>/agentry/.venv/              local Python venv with agentry     (gitignored)
+
+  <target>/docs/ai/roles/<role>.md     project-specific role rule files   (committed)
+
+There is no host-level Agentry directory. Each target carries everything
+it needs (and brings its own Python venv with a pinned-ish agentry version)
+when you clone it to a new machine. The machine itself only needs Python
+and the LLM CLIs (claude / codex), installed once via scripts/install-deps.
 
 The framework also ships **bundled defaults** for the standard 6-role roster.
-A target that provides nothing falls back to those defaults so operators can
-start with zero setup.
+A target that provides nothing falls back to those defaults.
 """
 
 from __future__ import annotations
 
 import os
-import sys
 from importlib.resources import files
 from pathlib import Path
 
@@ -33,7 +36,7 @@ from pydantic import BaseModel, Field, ValidationError, field_validator
 
 
 class AgentConfig(BaseModel):
-    """Per-role configuration block in ``.agentry/config.yml``."""
+    """Per-role configuration block in ``agentry/config.yml``."""
 
     cli: str = Field(..., min_length=1, description="Binary name or absolute path")
     args: list[str] = Field(default_factory=list, description="Arguments passed before the prompt")
@@ -43,17 +46,14 @@ class AgentConfig(BaseModel):
     prompt: str | None = Field(
         default=None,
         description=(
-            "Optional per-role prompt. If set, this exact text is sent to the LLM CLI "
-            "as stdin. If unset, the framework synthesizes a generic prompt from "
-            "prompt.GENERIC_PROMPT_TEMPLATE that mentions the parallel-pipeline pattern "
-            "and points the agent at docs/ai/roles/<role>.md."
+            "Optional per-role prompt sent to the LLM CLI as stdin. If unset, the "
+            "framework synthesizes a generic prompt from prompt.GENERIC_PROMPT_TEMPLATE."
         ),
     )
 
     @field_validator("interval_min", "total_min", "stall_min")
     @classmethod
     def _reasonable_minutes(cls, v: int, info) -> int:
-        # Sanity bounds — catch typos like 1440000.
         if v > 60 * 24 * 7:
             raise ValueError(
                 f"{info.field_name}={v} is more than a week of minutes; check for a typo"
@@ -62,15 +62,12 @@ class AgentConfig(BaseModel):
 
 
 class TargetConfig(BaseModel):
-    """Top-level shape of a target repo's ``.agentry/config.yml``."""
+    """Top-level shape of ``<target>/agentry/config.yml``."""
 
-    target_repo: str = Field(..., min_length=1, description="GitHub owner/repo (e.g. vinu-dev/rpi-home-monitor)")
+    target_repo: str = Field(..., min_length=1)
     agents: dict[str, AgentConfig] = Field(..., min_length=1)
     sensitive_paths: list[str] = Field(default_factory=list)
-    labels: dict[str, str] = Field(
-        default_factory=dict,
-        description="Optional rename: {default-label: actual-label-in-this-repo}",
-    )
+    labels: dict[str, str] = Field(default_factory=dict)
 
     @field_validator("agents")
     @classmethod
@@ -84,76 +81,57 @@ class TargetConfig(BaseModel):
 
 
 # -----------------------------------------------------------------------------
-# Path resolvers
+# Path resolvers — all per-target now (no host directory)
 # -----------------------------------------------------------------------------
 
 DEFAULTS_PACKAGE = "agentry.defaults.standard"
 
 
-def host_secrets_dir() -> Path:
-    """Return the per-user host directory that holds ONLY secrets (.env).
-
-    Windows: ``%USERPROFILE%\\Agentry\\``
-    Linux/macOS: ``~/.agentry/``
-
-    This is the only host-level location Agentry uses. Everything else
-    (logs, state, target config) lives inside each target repository's
-    ``.agentry/`` directory.
-    """
-    home = Path.home()
-    if sys.platform == "win32":
-        return home / "Agentry"
-    return home / ".agentry"
+def target_agentry_dir(target_path: Path | str) -> Path:
+    """``<target>/agentry/`` — visible folder, gtest-style."""
+    return Path(target_path) / "agentry"
 
 
-def host_env_file() -> Path:
-    """Path to the operator's secrets file."""
-    return host_secrets_dir() / ".env"
+def target_config_file(target_path: Path | str) -> Path:
+    """``<target>/agentry/config.yml``."""
+    return target_agentry_dir(target_path) / "config.yml"
 
 
-def target_state_dir(target_path: Path | str) -> Path:
-    """Where runtime state for ``target_path`` lives. Inside the target itself.
-
-    Path is ``<target>/.agentry/state/``. Created on demand by callers.
-    Should be in the target's ``.gitignore`` (the bundled defaults already
-    ignore ``.agentry/state/`` and ``.agentry/logs/``).
-    """
-    return Path(target_path) / ".agentry" / "state"
+def target_env_file(target_path: Path | str) -> Path:
+    """``<target>/agentry/.env`` — secrets file, gitignored."""
+    return target_agentry_dir(target_path) / ".env"
 
 
 def target_logs_dir(target_path: Path | str) -> Path:
-    """Where per-role agent stdout/stderr logs live for ``target_path``."""
-    return Path(target_path) / ".agentry" / "logs"
+    """``<target>/agentry/logs/`` — per-role agent stdout."""
+    return target_agentry_dir(target_path) / "logs"
+
+
+def target_state_dir(target_path: Path | str) -> Path:
+    """``<target>/agentry/state/`` — runtime state."""
+    return target_agentry_dir(target_path) / "state"
 
 
 def bundled_default_config_path() -> Path:
-    """Path to the bundled standard 6-role config file shipped with the package."""
+    """Bundled standard config.yml shipped with the package."""
     return Path(str(files(DEFAULTS_PACKAGE).joinpath("config.yml")))
 
 
 def bundled_default_role_path(role: str) -> Path:
-    """Path to the bundled default role rule file for ``role``."""
+    """Bundled default role rule file for ``role``."""
     return Path(str(files(DEFAULTS_PACKAGE).joinpath(f"roles/{role}.md")))
 
 
 def load_target_config(target_path: Path | str) -> TargetConfig:
-    """Load and validate the target repo's `.agentry/config.yml`.
+    """Load and validate ``<target>/agentry/config.yml``.
 
-    Falls back to the bundled standard config when the target doesn't have one.
-    Callers can detect the fallback via ``(target_path / '.agentry' / 'config.yml').is_file()``.
-
-    Args:
-        target_path: Path to the target repository root.
-
-    Raises:
-        FileNotFoundError: If ``target_path`` itself doesn't exist.
-        ValidationError: If the config is malformed.
+    Falls back to the bundled standard config if the target doesn't have one.
     """
     target_root = Path(target_path)
     if not target_root.exists():
         raise FileNotFoundError(f"target path does not exist: {target_root}")
 
-    config_file = target_root / ".agentry" / "config.yml"
+    config_file = target_config_file(target_root)
     if not config_file.is_file():
         config_file = bundled_default_config_path()
 
@@ -164,11 +142,12 @@ def load_target_config(target_path: Path | str) -> TargetConfig:
     return TargetConfig.model_validate(raw)
 
 
-def role_rule_path(target_path: Path, role: str) -> Path:
+def role_rule_path(target_path: Path | str, role: str) -> Path:
     """Resolve the rule file path for ``role`` in this target.
 
-    Returns the target's ``docs/ai/roles/<role>.md`` if it exists; otherwise
-    the bundled default.
+    Looks at ``<target>/docs/ai/roles/<role>.md`` first; falls back to the
+    bundled default. Rule files live in the host repo's standard location
+    (``docs/ai/roles/``), not inside the ``agentry/`` folder.
     """
     target_specific = Path(target_path) / "docs" / "ai" / "roles" / f"{role}.md"
     if target_specific.is_file():
@@ -179,11 +158,27 @@ def role_rule_path(target_path: Path, role: str) -> Path:
     return target_specific
 
 
-def _opt(v: object) -> Path | None:
-    """Tolerate ``~`` and ``$VAR`` in path-typed config fields."""
-    if v is None or v == "":
-        return None
-    return Path(os.path.expandvars(os.path.expanduser(str(v))))
+def load_target_env(target_path: Path | str) -> None:
+    """Load ``<target>/agentry/.env`` into os.environ.
+
+    Idempotent and silent. Existing env vars are NOT overwritten — explicit
+    shell exports take precedence.
+    """
+    env_path = target_env_file(target_path)
+    if not env_path.is_file():
+        return
+    try:
+        for line in env_path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            key = key.strip()
+            value = value.strip().strip('"').strip("'")
+            if key and key not in os.environ:
+                os.environ[key] = value
+    except OSError:
+        pass
 
 
 __all__ = [
@@ -192,10 +187,12 @@ __all__ = [
     "ValidationError",
     "bundled_default_config_path",
     "bundled_default_role_path",
-    "host_env_file",
-    "host_secrets_dir",
     "load_target_config",
+    "load_target_env",
     "role_rule_path",
+    "target_agentry_dir",
+    "target_config_file",
+    "target_env_file",
     "target_logs_dir",
     "target_state_dir",
 ]

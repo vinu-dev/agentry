@@ -1,211 +1,173 @@
 # Agentry
 
-Status: **v0.0a-final (spec complete, pre-implementation)**
+Status: **v0.1 (alpha) — running, not yet validated against real targets**
 
-Agentry is a small Python daemon that runs **N forever-loops in parallel**, one per role declared by the target repo. Each loop spawns an LLM CLI subprocess (Claude Code, Codex CLI, etc.) at its own interval. The framework supplies a generic prompt encoding the parallel-pipeline pattern; the target repo supplies project-specific role rule files at `docs/ai/roles/<role>.md`. The agent does the work, exits. The daemon supervises: timeouts, restarts, Discord pings.
+Agentry is an autonomous multi-agent product organization. It runs continuously against a target GitHub repository and ships features through a pipeline of specialized roles — Researcher, Architect, Implementer, Tester, Reviewer, Release Engineer — each backed by an LLM CLI of your choice (Claude Code, OpenAI Codex CLI, or any wrapper script you can put on PATH).
 
-That's the whole product. ~200 lines of Python. **N is whatever the repo declares** — 6 for a hobby project, 11+ for a medical device project.
+The agents are commodity workers. The orchestrator is the value: it keeps the pipeline running, restarts agents that stall, and turns a few-line config file into a continuously-shipping software team.
 
-State lives in GitHub (issues, labels, PRs, branches). The daemon has no persistent state. Restart it any time.
+> **Mental model.** Agentry is a contractor you hire once. You give it a job description (`agentry/config.yml`). It hires gig workers from the AI spot market — Anthropic, OpenAI, your local Llama. It supervises them, fires the ones that don't work, calls in backups. You write your project's role rules in `docs/ai/roles/*.md` and let it run.
 
-## Common starter roster (6 roles)
+## How it's used — gtest-style
 
-| Role | Reads | Produces |
-|------|-------|----------|
-| **Researcher** | repo + web | new issues for missing features |
-| **Architect** | issues `ready-for-design` | design docs, relabels `ready-for-implementation` |
-| **Implementer** | issues `ready-for-implementation` | code on a branch, relabels `ready-for-test` |
-| **Tester** | issues `ready-for-test` | runs tests; if green opens PR `ready-for-review`, if red `tests-failed` |
-| **Reviewer** | PRs `ready-for-review` | approves OR `blocked` |
-| **Release Engineer** | merged commits since last tag | tag + build + GitHub Release |
-
-Each role gets its own model assignment. Operator picks: Claude for research, Codex for implementation, local Llama for review, etc.
-
-## Extended roster — medical device (11 roles)
-
-For regulated software (IEC 62304 + ISO 13485 + ISO 14971 + IEC 81001-5-1 + FDA 21 CFR 820), the roster grows to include:
-
-- **risk_analyst** (ISO 14971)
-- **code_reviewer** (functional review)
-- **quality_reviewer** (ISO 13485 / IEC 62304 conformance)
-- **cybersecurity_reviewer** (IEC 81001-5-1 + FDA cyber guidance)
-- **regulatory_reviewer** (FDA 510(k) / 21 CFR 820)
-- **traceability_tracker** (bidirectional req → design → code → tests)
-
-Same framework, more threads. See [`docs/examples/medical-device/`](docs/examples/medical-device/) for a full config and rule files.
-
-## What target repos provide
-
-**Nothing — by default.** Agentry ships with best-practice defaults: the standard 6-role config and bundled rule files. Point Agentry at your repo and it runs with those defaults out of the box.
-
-You only commit files in your target repo when you want to **override** a default:
+Agentry is a **dependency you pull into your target repo**, not a system service. Each repo gets its own `agentry/` folder with its own pinned-ish Python venv. Run `./agentry/start.ps1` (or `.sh`) to start it; close the terminal to stop. **No NSSM, no systemd, no service install.** Reboot kills it; you start it again when you want to work.
 
 ```
-target-repo/   (only the files you want to customize)
-├── .agentry/config.yml                ← override CLIs / timeouts / roles (optional)
-└── docs/ai/roles/                     ← override per-role instructions (optional, per file)
-    ├── researcher.md
-    ├── architect.md
-    ├── implementer.md
-    ├── tester.md
-    ├── reviewer.md
-    └── release.md
+your-target-repo/                       ← e.g. rpi-home-monitor
+├── agentry/                            ← visible folder, fetched on demand
+│   ├── config.yml                      ← committed: which model per role
+│   ├── start.ps1 / start.sh            ← run this to start agentry
+│   ├── .env.example                    ← copy to .env, fill GITHUB_TOKEN
+│   ├── .gitignore
+│   ├── .env                            ← gitignored
+│   ├── .venv/                          ← gitignored, auto-created
+│   ├── logs/                           ← gitignored
+│   └── state/                          ← gitignored
+├── docs/ai/roles/                      ← committed: per-role rule files
+│   ├── researcher.md
+│   ├── architect.md
+│   ├── implementer.md
+│   ├── tester.md
+│   ├── reviewer.md
+│   └── release.md
+└── (your code)
 ```
 
-Most projects override one or two things (which CLI handles each role; project-specific test commands). The bundled defaults handle the rest.
+**Where rule files live:** `docs/ai/roles/<role>.md` — the standard target-repo location, **NOT** inside `agentry/`. Edit those for project-specific instructions per role.
 
-The canonical default config and rule files are at [`docs/examples/standard/`](docs/examples/standard/) — that's exactly what gets copied into your target if you run `agentry init`.
+## Setup — three scripts, three contexts
 
-GitHub labels are created automatically by `agentry doctor --init-labels`: `ready-for-design`, `ready-for-implementation`, `ready-for-test`, `tests-failed`, `ready-for-review`, `blocked`.
+### 1. Once per machine — install dependencies
 
-The framework prompts are generic ("read `docs/ai/roles/X.md` and follow it"). The actual work instructions live in the bundled rule files (or your overrides if you have them).
-
-## Read in this order
-
-1. **[`docs/architecture.md`](docs/architecture.md)** — the lean design (~250 lines)
-2. **[`docs/how-to-use.md`](docs/how-to-use.md)** — Operator's practical guide
-3. **[`docs/v0.1-plan.md`](docs/v0.1-plan.md)** — concrete build plan (~weekend-sized)
-4. **[`COMPATIBILITY-SPEC.md`](COMPATIBILITY-SPEC.md)** — what target repos must provide
-
-Templates:
-
-- **[`.env.example`](.env.example)** — secrets template (the only host-level file)
-
-## What works today
-
-Nothing runs yet. v0.0a is the spec — design only, no code. The runtime ships in v0.1.
-
-## Install (one-liner)
-
-### Windows (PowerShell)
-
-```powershell
-iwr -useb https://raw.githubusercontent.com/vinu-dev/agentry/main/scripts/install.ps1 | iex
-```
-
-### Linux
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/vinu-dev/agentry/main/scripts/install.sh | bash
-```
-
-The installer is idempotent and installs everything Agentry needs:
-
-- Python 3.11+ (only if missing)
-- Node.js LTS (only if missing) — required for the LLM CLIs
-- `agentry` itself (via `pipx` on Linux, `pip --user` on Windows)
-- `claude` (Claude Code) and `codex` (OpenAI Codex CLI) via npm
-- NSSM on Windows (only needed if you'll use `agentry service install`)
-- Your host secrets folder (`%USERPROFILE%\Agentry\` on Windows, `~/.agentry/` on Linux) with a template `.env` (just one folder — only the secrets file lives here; everything else lives in your target repos)
-
-The installer does **not** do anything that requires your credentials:
-
-- It does not run `claude login` / `codex login` (those open your browser)
-- It does not fill in API keys / GitHub PAT in your `.env`
-
-Those steps are listed at the end of the install run.
-
-### After install
-
-```bash
-claude login                                  # opens browser, links your subscription
-codex login                                   # same for ChatGPT
-
-# Fill in your one required secret:
-#   Windows: %USERPROFILE%\Agentry\.env
-#   Linux:   ~/.agentry/.env
-$EDITOR <agentry-dir>/.env                    # GITHUB_TOKEN — that's the only required field
-
-cd <your-target-repo>
-agentry doctor --init-labels                  # creates the 6 GitHub labels in the target
-agentry start                                  # foreground (Ctrl-C to stop)
-# OR
-agentry service install                       # always-on (systemd / NSSM)
-```
-
-That's it. Notifications, API-key fallbacks, and provider-specific env vars are all optional — see the comments in your `.env` template if you want to enable any of them.
-
-Then configure the target with `.agentry/config.yml` + role rule files (or use the bundled defaults), and `agentry target add --repo <url>` if running with the service.
-
-### Watching what it does
-
-Every role's stdout is logged per-run inside your target repo:
-
-```
-<target-repo>/.agentry/logs/<role>/<timestamp>.log
-```
-
-Tail the latest run live with `tail -f`, or run `agentry status` to see a per-role summary. No external service required.
-
-If you want push notifications when an agent stalls or finishes, configure `DISCORD_WEBHOOK_URL` in your host `.env` (Telegram + email come in v0.2+).
-
-## Where your data lives — gtest-style, in your target repo
-
-Everything Agentry writes lives **inside the target repo's own `.agentry/` directory**, alongside your code. Each repo carries its own activity history with it; nothing scattered in your home directory.
-
-```
-<your-target-repo>/                       ← e.g. rpi-home-monitor
-├── .agentry/
-│   ├── config.yml                        ← committed: agent assignments + sensitive paths
-│   ├── .gitignore                        ← committed: ignores logs/ + state/
-│   ├── logs/                             ← gitignored: per-role agent stdout
-│   │   ├── researcher/
-│   │   ├── architect/
-│   │   ├── implementer/
-│   │   ├── tester/
-│   │   ├── reviewer/
-│   │   └── release/
-│   └── state/                            ← gitignored: runtime state
-└── docs/ai/roles/                        ← committed: per-role rule files
-    ├── researcher.md
-    ├── architect.md
-    ├── implementer.md
-    ├── tester.md
-    ├── reviewer.md
-    └── release.md
-```
-
-The **only** thing Agentry stores at the host level is your secrets:
-
-| Platform | Path | Contents |
-|----------|------|----------|
-| Windows | `%USERPROFILE%\Agentry\.env` | `GITHUB_TOKEN`, optional API keys + Discord webhook |
-| Linux/macOS | `~/.agentry/.env` | same |
-
-That's it. No separate state dir, no scattered logs, no `pipeline.local.toml`. Just the secrets file at the host level (because secrets must NOT live in git), and everything else inside the target repo where it belongs.
-
-## Uninstall
+Installs Python, Node.js, Claude Code CLI, OpenAI Codex CLI. **Doesn't install agentry itself** (that goes per-target).
 
 ```powershell
 # Windows
-iwr -useb https://raw.githubusercontent.com/vinu-dev/agentry/main/scripts/uninstall.ps1 | iex
+iwr -useb https://raw.githubusercontent.com/vinu-dev/agentry/main/scripts/install-deps.ps1 | iex
 ```
 
 ```bash
 # Linux
-curl -fsSL https://raw.githubusercontent.com/vinu-dev/agentry/main/scripts/uninstall.sh | bash
+curl -fsSL https://raw.githubusercontent.com/vinu-dev/agentry/main/scripts/install-deps.sh | bash
 ```
 
-By default the uninstaller removes:
-- The Windows Service / systemd unit (if registered)
-- The agentry Python package
-- Both LLM CLI npm globals (`@anthropic-ai/claude-code`, `@openai/codex`)
-- Your Agentry user data folder (`Agentry\` or `.agentry/`)
+Then authenticate the LLM CLIs (each opens your browser):
 
-It keeps Node.js and NSSM by default since other tools may use them. Pass `-RemoveDeps` (Windows) or `--remove-deps` (Linux) to also remove those. Pass `-KeepConfig` / `--keep-config` to preserve `.env` and `pipeline.local.toml` for a future reinstall.
+```
+claude login
+codex login
+```
+
+### 2. Once per target repo — drop agentry/ into it
+
+From inside the target:
+
+```powershell
+# Windows
+cd C:\projects\rpi-home-monitor
+iwr -useb https://raw.githubusercontent.com/vinu-dev/agentry/main/scripts/add-to-target.ps1 | iex
+```
+
+```bash
+# Linux
+cd ~/projects/rpi-home-monitor
+curl -fsSL https://raw.githubusercontent.com/vinu-dev/agentry/main/scripts/add-to-target.sh | bash
+```
+
+This downloads the `agentry/` folder skeleton + role rule file skeletons into the target. Auto-detects `target_repo` from the git remote.
+
+You then:
+
+1. Copy `agentry/.env.example` to `agentry/.env` and fill in your `GITHUB_TOKEN`
+2. Edit `agentry/config.yml` if you want to change which CLI handles which role (default: Codex for implementation, Claude for everything else)
+3. (Optional) Edit `docs/ai/roles/*.md` for project-specific instructions
+
+### 3. Every time you want it running — start it
+
+```powershell
+# Windows
+cd C:\projects\rpi-home-monitor
+.\agentry\start.ps1
+```
+
+```bash
+# Linux
+cd ~/projects/rpi-home-monitor
+./agentry/start.sh
+```
+
+First run: creates `agentry/.venv/`, pip-installs agentry into it. Subsequent runs: just activates the venv and starts the orchestrator. Foreground; Ctrl-C to stop.
+
+## What you actually edit per role
+
+Open `agentry/config.yml`. Looks like this:
+
+```yaml
+target_repo: vinu-dev/rpi-home-monitor
+
+agents:
+  researcher:
+    cli: claude
+    args: ["-p", "--dangerously-skip-permissions"]
+    interval_min: 60
+    total_min: 30
+    stall_min: 5
+    prompt: |
+      You are the Researcher. Read docs/ai/roles/researcher.md and follow it.
+      If that file doesn't exist, exit with error.
+
+  implementer:
+    cli: codex
+    args: ["--auto-approve"]
+    interval_min: 5
+    total_min: 60
+    stall_min: 10
+    prompt: |
+      You are the Implementer. Read docs/ai/roles/implementer.md and follow it.
+  # ... etc for the other 4 roles
+```
+
+Change the `cli:` field to switch which LLM handles each role. The prompt points at a rule file in `docs/ai/roles/` — your project-specific instructions for that role.
+
+## Watching what it does
+
+Per-role logs land in your target at `agentry/logs/<role>/<timestamp>.log`. Tail with `tail -f` (or `Get-Content -Wait` on Windows), or run `agentry status` from the target dir for a per-role summary.
+
+If `DISCORD_WEBHOOK_URL` is set in your `.env`, agent lifecycle events also go there (started / exited / stalled / timed-out), batched 60s.
+
+## Removing agentry from a target repo
+
+Just delete the `agentry/` folder and (optionally) `docs/ai/roles/`. That's the entire uninstall.
+
+## Removing dependencies from your machine
+
+```powershell
+# Windows
+winget uninstall OpenJS.NodeJS.LTS
+npm uninstall -g @anthropic-ai/claude-code @openai/codex
+```
+
+```bash
+# Linux — depends on your distro
+apt remove nodejs npm                   # debian/ubuntu
+npm uninstall -g @anthropic-ai/claude-code @openai/codex
+```
+
+To sign out of subscription credentials: `claude logout`, `codex logout`.
 
 ## License
 
 **AGPL-3.0** — see [LICENSE](LICENSE).
 
-This is intentional copyleft. If you fork Agentry, modify it, and run it
-as a service to others (including running it inside your company on private
-projects you don't open), you must release the source of your modified version
-under AGPL-3.0 as well.
+If you fork Agentry, modify it, and run it as a service to others (including running it inside your company on closed-source projects), you must release the source of your modified version under AGPL-3.0 as well.
 
 ### Commercial license
 
-The AGPL terms are not friendly to closed-source commercial use. If you want
-to use Agentry inside a proprietary product or service without the
-AGPL obligations, a commercial license is available — contact
-[@vinu-dev](https://github.com/vinu-dev).
+For closed-source commercial use without the AGPL obligations, contact [@vinu-dev](https://github.com/vinu-dev).
+
+## More
+
+- [`docs/architecture.md`](docs/architecture.md) — design and architecture
+- [`docs/how-to-use.md`](docs/how-to-use.md) — operator's guide (longer-form)
+- [`COMPATIBILITY-SPEC.md`](COMPATIBILITY-SPEC.md) — what target repos must provide
+- [`docs/examples/medical-device/`](docs/examples/medical-device/) — extended 11-role example for regulated software (IEC 62304, ISO 13485, FDA 21 CFR 820)

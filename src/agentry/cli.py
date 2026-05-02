@@ -1,25 +1,15 @@
 """Click-based CLI for Agentry.
 
+After this refactor the CLI surface is intentionally small. ``agentry`` runs
+inside the target repo's local venv (created by ``agentry/start.{ps1,sh}``);
+the daemon-mode service installer is gone.
+
 Subcommands (v0.1):
   agentry --version
   agentry doctor    [--target PATH]
-  agentry init      [--template standard|medical-device]
   agentry start     [--target PATH]
   agentry status    [--target PATH]
-  agentry service install     [--target PATH]
-  agentry service uninstall
-
-Out of scope for v0.1: pause/resume/kick/replay/quarantine/unlock — all of
-those need IPC between the running daemon and the CLI. Operators stop with
-the OS service manager (systemctl / nssm stop) for now.
-
-Layout:
-  - Per-target ``<target>/.agentry/config.yml`` — committed agent assignments
-  - Per-target ``<target>/.agentry/{logs,state}/`` — runtime data, gitignored
-  - Per-host ``<agentry-secrets-dir>/.env`` — secrets only (GITHUB_TOKEN etc.)
-
-The .env file is the only thing Agentry reads from the host. Everything
-else lives inside the target repo.
+  agentry default-paths
 """
 
 from __future__ import annotations
@@ -29,7 +19,6 @@ import os
 import shutil
 import signal
 import sys
-from importlib.resources import files
 from pathlib import Path
 
 import click
@@ -38,10 +27,12 @@ from pydantic import ValidationError
 from agentry.config import (
     bundled_default_config_path,
     bundled_default_role_path,
-    host_env_file,
-    host_secrets_dir,
     load_target_config,
+    load_target_env,
     role_rule_path,
+    target_agentry_dir,
+    target_config_file,
+    target_env_file,
     target_logs_dir,
 )
 from agentry.github import gh_available, init_labels as gh_init_labels, list_labels, repo_exists
@@ -50,30 +41,6 @@ from agentry.orchestrator import Orchestrator
 from agentry.version import __version__
 
 logger = logging.getLogger("agentry")
-
-
-def _load_env_file() -> None:
-    """Load secrets from the host's .env into os.environ.
-
-    Idempotent and silent. Lines like ``KEY=value`` are parsed; comments
-    and blank lines are skipped. Existing env vars are NOT overwritten —
-    explicit shell exports take precedence.
-    """
-    env_path = host_env_file()
-    if not env_path.is_file():
-        return
-    try:
-        for line in env_path.read_text(encoding="utf-8").splitlines():
-            line = line.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-            key, _, value = line.partition("=")
-            key = key.strip()
-            value = value.strip().strip('"').strip("'")
-            if key and key not in os.environ:
-                os.environ[key] = value
-    except OSError as e:
-        logger.warning("could not read %s: %s", env_path, e)
 
 
 @click.group(invoke_without_command=False)
@@ -88,7 +55,6 @@ def cli(ctx: click.Context, verbose: bool) -> None:
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
     ctx.ensure_object(dict)
-    _load_env_file()
 
 
 # -----------------------------------------------------------------------------
@@ -112,6 +78,8 @@ def cli(ctx: click.Context, verbose: bool) -> None:
 )
 def doctor(target_path: Path, init_labels_flag: bool) -> None:  # noqa: PLR0915
     """Validate that the target repo + secrets + CLIs are operable."""
+    target_path = target_path.resolve()
+    load_target_env(target_path)
     ok = True
 
     # 1. Target config (or bundled default).
@@ -124,14 +92,18 @@ def doctor(target_path: Path, init_labels_flag: bool) -> None:  # noqa: PLR0915
         click.secho(f"FAIL  config invalid:\n{e}", fg="red")
         sys.exit(2)
 
-    using_bundled = not (target_path / ".agentry" / "config.yml").is_file()
+    using_bundled = not target_config_file(target_path).is_file()
     if using_bundled:
         click.secho(
-            "INFO  using bundled standard 6-role config (no .agentry/config.yml in target)",
+            f"INFO  no agentry/config.yml in target; using bundled standard 6-role config",
+            fg="cyan",
+        )
+        click.secho(
+            "      run scripts/add-to-target to drop a config + role file skeletons into this repo",
             fg="cyan",
         )
     else:
-        click.secho("OK    .agentry/config.yml present and valid", fg="green")
+        click.secho(f"OK    {target_config_file(target_path)} present and valid", fg="green")
 
     # 2. Role rule files.
     for role in target_config.agents:
@@ -155,25 +127,17 @@ def doctor(target_path: Path, init_labels_flag: bool) -> None:  # noqa: PLR0915
             )
 
     # 4. Secrets file.
-    env_path = host_env_file()
+    env_path = target_env_file(target_path)
     if env_path.is_file():
-        click.secho(f"OK    secrets file present: {env_path}", fg="green")
+        click.secho(f"OK    {env_path} present", fg="green")
     else:
         click.secho(
-            f"WARN  no secrets file at {env_path}; agents will lack GITHUB_TOKEN, "
-            f"DISCORD_WEBHOOK_URL, etc. (run the install script or copy .env.example)",
+            f"WARN  no secrets file at {env_path}; copy {env_path.with_suffix('.example')} "
+            "and fill in GITHUB_TOKEN",
             fg="yellow",
         )
 
-    # 5. Per-target runtime dir.
-    state_dir = target_path / ".agentry"
-    if not state_dir.exists():
-        click.secho(
-            f"INFO  {state_dir} will be created on first run for logs/ and state/",
-            fg="cyan",
-        )
-
-    # 6. gh CLI / target repo.
+    # 5. gh CLI / target repo.
     if gh_available():
         if repo_exists(target_config.target_repo):
             click.secho(f"OK    gh sees {target_config.target_repo}", fg="green")
@@ -188,7 +152,7 @@ def doctor(target_path: Path, init_labels_flag: bool) -> None:  # noqa: PLR0915
             fg="yellow",
         )
 
-    # 7. Optional --init-labels.
+    # 6. Optional --init-labels.
     if init_labels_flag:
         if not gh_available():
             click.secho("FAIL  cannot init labels: gh not on PATH", fg="red")
@@ -209,87 +173,6 @@ def doctor(target_path: Path, init_labels_flag: bool) -> None:  # noqa: PLR0915
 
 
 # -----------------------------------------------------------------------------
-# init
-# -----------------------------------------------------------------------------
-
-
-@cli.command()
-@click.option(
-    "--template",
-    type=click.Choice(["standard", "medical-device"]),
-    default="standard",
-    help="Which bundled template to copy.",
-)
-@click.option(
-    "--target",
-    "target_path",
-    type=click.Path(file_okay=False, path_type=Path),
-    default=Path.cwd(),
-    help="Target repo directory. Defaults to the current directory.",
-)
-@click.option("--force", is_flag=True, help="Overwrite existing files.")
-def init(template: str, target_path: Path, force: bool) -> None:
-    """Copy the bundled template into the target repo."""
-    target_path = target_path.resolve()
-    if not target_path.exists():
-        click.secho(f"target path does not exist: {target_path}", fg="red")
-        sys.exit(2)
-
-    template_pkg = "agentry.defaults.standard"
-    if template == "medical-device":
-        click.secho(
-            "medical-device template is documentation-only in v0.1.\n"
-            "Copy from https://github.com/vinu-dev/agentry/tree/main/docs/examples/medical-device manually.",
-            fg="yellow",
-        )
-        sys.exit(1)
-
-    src_root = files(template_pkg)
-    written: list[Path] = []
-    for src in src_root.iterdir():
-        _copy_resource_into(src, target_path, src_root, force=force, written=written)
-
-    # Always also write a .gitignore inside .agentry/ so the operator's
-    # logs and state never accidentally get committed.
-    gitignore_path = target_path / ".agentry" / ".gitignore"
-    if not gitignore_path.exists() or force:
-        gitignore_path.parent.mkdir(parents=True, exist_ok=True)
-        gitignore_path.write_text(
-            "# Agentry runtime data — never commit\nlogs/\nstate/\n",
-            encoding="utf-8",
-        )
-        written.append(gitignore_path)
-
-    click.secho(f"\nWrote {len(written)} file(s) into {target_path}", fg="green")
-    for p in written:
-        click.echo(f"  {p.relative_to(target_path)}")
-
-
-def _copy_resource_into(src, target_root: Path, root, *, force: bool, written: list[Path]) -> None:
-    """Recursively copy a bundled resource into the target directory tree."""
-    if src.is_dir():
-        for child in src.iterdir():
-            _copy_resource_into(child, target_root, root, force=force, written=written)
-        return
-
-    rel = Path(str(src)).relative_to(str(root))
-    if rel.name == "config.yml" and len(rel.parts) == 1:
-        dst = target_root / ".agentry" / "config.yml"
-    elif rel.parts[0] == "roles":
-        dst = target_root / "docs" / "ai" / "roles" / Path(*rel.parts[1:])
-    else:
-        dst = target_root / rel
-
-    if dst.exists() and not force:
-        click.secho(f"SKIP  {dst} already exists (use --force to overwrite)", fg="yellow")
-        return
-
-    dst.parent.mkdir(parents=True, exist_ok=True)
-    dst.write_bytes(src.read_bytes())
-    written.append(dst)
-
-
-# -----------------------------------------------------------------------------
 # start
 # -----------------------------------------------------------------------------
 
@@ -303,15 +186,21 @@ def _copy_resource_into(src, target_root: Path, root, *, force: bool, written: l
     help="Target repo directory. Defaults to the current directory.",
 )
 def start(target_path: Path) -> None:
-    """Start the orchestrator in foreground (use service install for daemon mode)."""
+    """Start the orchestrator in foreground.
+
+    Runs forever until you Ctrl-C or close the terminal. There's no service
+    install path — every reboot, run ``agentry/start.ps1`` (or ``.sh``) again
+    from inside the target repo.
+    """
     target_path = target_path.resolve()
+    load_target_env(target_path)
     target_config = load_target_config(target_path)
 
     webhook_url = os.environ.get("DISCORD_WEBHOOK_URL") or None
     if not webhook_url:
         click.secho(
-            "INFO  DISCORD_WEBHOOK_URL not set; notifications will go to logs only "
-            "(see <target>/.agentry/logs/)",
+            "INFO  DISCORD_WEBHOOK_URL not set; events go to "
+            f"{target_logs_dir(target_path)} only",
             fg="cyan",
         )
 
@@ -336,8 +225,9 @@ def start(target_path: Path) -> None:
 
     click.secho(
         f"agentry started for {target_config.target_repo} ({len(target_config.agents)} roles)\n"
-        f"  target:   {target_path}\n"
-        f"  logs:     {target_path / '.agentry' / 'logs'}",
+        f"  target: {target_path}\n"
+        f"  logs:   {target_logs_dir(target_path)}\n"
+        "press Ctrl-C to stop.",
         fg="green",
     )
     orch.start()
@@ -386,57 +276,13 @@ def status(target_path: Path) -> None:
 
 
 # -----------------------------------------------------------------------------
-# service
-# -----------------------------------------------------------------------------
-
-
-@cli.group()
-def service() -> None:
-    """Install/uninstall the always-on service (systemd / NSSM)."""
-
-
-@service.command("install")
-@click.option(
-    "--target",
-    "target_path",
-    type=click.Path(exists=True, file_okay=False, path_type=Path),
-    default=Path.cwd(),
-)
-def service_install(target_path: Path) -> None:
-    """Register the orchestrator as a system service."""
-    target_path = target_path.resolve()
-    if sys.platform == "win32":
-        from agentry.platform import windows as plat
-    else:
-        from agentry.platform import linux as plat
-
-    plat.install_service(target_path)
-    click.secho(f"service installed for target {target_path}", fg="green")
-
-
-@service.command("uninstall")
-def service_uninstall() -> None:
-    """Stop and remove the system service."""
-    if sys.platform == "win32":
-        from agentry.platform import windows as plat
-    else:
-        from agentry.platform import linux as plat
-
-    plat.uninstall_service()
-    click.secho("service uninstalled", fg="green")
-
-
-# -----------------------------------------------------------------------------
-# default-paths (utility — show where bundled defaults live)
+# default-paths (utility)
 # -----------------------------------------------------------------------------
 
 
 @cli.command("default-paths")
 def default_paths() -> None:
-    """Print the on-disk paths of the bundled default config + role files
-    and the host secrets file location."""
-    click.echo(f"host secrets dir:  {host_secrets_dir()}")
-    click.echo(f"host .env file:    {host_env_file()}")
+    """Print the on-disk paths of the bundled default config + role files."""
     click.echo(f"bundled config:    {bundled_default_config_path()}")
     for role in (
         "researcher",
