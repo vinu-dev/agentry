@@ -152,14 +152,17 @@ flowchart LR
   C --> D["Implementer session"]
   D --> E["ready-for-test issue"]
   E --> F["Tester session"]
-  F --> G["ready-for-review PR"]
-  G --> H["Reviewer session"]
-  H --> I["agent-approved PR"]
+  F --> G["pr-open issue"]
+  F --> H["ready-for-review PR"]
+  H --> I["Reviewer session"]
+  I --> J["agent-approved PR"]
 ```
 
 Each role handles one item per run and updates GitHub. On the next scheduler
 tick, cheap label checks decide whether the next role should run. If there is no
 matching issue or PR, no LLM is spawned.
+`pr-open` is kept on the issue while the PR is alive, so the issue does not look
+idle after the Tester removes `ready-for-test`.
 
 ## Corner Cases
 

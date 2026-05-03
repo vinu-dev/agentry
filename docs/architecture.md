@@ -88,13 +88,16 @@ flowchart LR
   C --> D["Implementer"]
   D --> E["ready-for-test issue"]
   E --> F["Tester"]
-  F --> G["ready-for-review PR"]
-  G --> H["Reviewer"]
-  H --> I["agent-approved PR"]
+  F --> G["pr-open issue"]
+  F --> H["ready-for-review PR"]
+  H --> I["Reviewer"]
+  I --> J["agent-approved PR"]
 ```
 
 Each role handles one work item per run in the bundled standard workflow. The
 next role wakes only when GitHub contains the label it watches.
+`pr-open` is an issue status label, not a queue trigger; it keeps the linked
+issue visibly tied to its PR while review and approval happen on the PR.
 
 ## Sessions And Watchdog State
 

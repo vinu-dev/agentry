@@ -12,7 +12,7 @@ For regulated software, see the [medical-device example](../medical-device/).
 | `researcher` | repo/web signals, only when autonomous mode allows it | new issues labeled `ready-for-design` |
 | `architect` | issues labeled `ready-for-design` | spec branch + `ready-for-implementation` |
 | `implementer` | issues labeled `ready-for-implementation`, `tests-failed`, or `changes-requested` | code/tests + `ready-for-test` |
-| `tester` | issues labeled `ready-for-test` | PR labeled `ready-for-review` or issue labeled `tests-failed` |
+| `tester` | issues labeled `ready-for-test` | issue labeled `pr-open` plus PR labeled `ready-for-review`, or issue labeled `tests-failed` |
 | `reviewer` | PRs labeled `ready-for-review` | `agent-approved` or `blocked`/`changes-requested` |
 | `release` | release-approved work, when enabled | tags, artifacts, GitHub Release |
 
@@ -25,6 +25,7 @@ ready-for-design issue
   -> implementer
   -> ready-for-test issue
   -> tester
+  -> pr-open issue
   -> ready-for-review PR
   -> reviewer
   -> agent-approved PR

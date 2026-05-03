@@ -27,6 +27,11 @@ RUNTIME_CONTRACT = """\
   `ready-for-review`, `blocked`, or retry labels. Request-changes outcomes must
   remove `agent-approved`, remove `ready-for-review`, add `blocked`, and move
   the linked issue to `changes-requested`.
+- When a PR is opened or reused for an issue, add `pr-open` to the linked issue
+  before removing its previous queue label. Keep `pr-open` while the PR exists,
+  including after review feedback, so humans can see that the issue has an
+  active PR even when another queue label such as `changes-requested` is also
+  present.
 - If `agent-approved` is missing in the target repo, create it before applying
   it: `gh label create agent-approved --color 0e8a16 --force`.
 - Never leave an item in the same trigger label after a completed cycle. Move it

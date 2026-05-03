@@ -395,8 +395,9 @@ agents:
              pr=$(gh pr list --head "feature/<id>-${slug}" --state open --json number --jq '.[0].number')
            fi
            gh label create agent-approved --color 0e8a16 --force
+           gh label create pr-open --color 1d76db --force
            gh pr edit <pr> --add-label ready-for-review --remove-label blocked --remove-label agent-approved
-           gh issue edit <id> --remove-label ready-for-test
+           gh issue edit <id> --add-label pr-open --remove-label ready-for-test
            gh issue comment <id> --body "Tests passed; PR #<pr> opened."
          ANY RED:
            gh issue edit <id> --add-label tests-failed --remove-label ready-for-test
@@ -497,18 +498,19 @@ agents:
          `gh pr comment <n> --body "Agentry review outcome: APPROVED\n\n<concise summary>"`.
          The verified comment plus `agent-approved` is the canonical Agentry
          approval signal. Still add `agent-approved`, remove `ready-for-review`
-         and `blocked`, and verify with `gh pr view`.
+         and `blocked`, verify with `gh pr view`, and leave the linked issue's
+         `pr-open` label in place until the PR or issue closes.
          (Do NOT click merge — code-owner human merges.)
          BLOCK (any item failed):
            gh label create agent-approved --color 0e8a16 --force
            gh pr review <n> --request-changes --body "Agentry review outcome: REQUEST CHANGES\n\n<itemized issues>"
            gh pr edit <n> --remove-label agent-approved --add-label blocked --remove-label ready-for-review
-           gh issue edit <id> --add-label changes-requested --remove-label ready-for-test
+           gh issue edit <id> --add-label changes-requested --add-label pr-open --remove-label ready-for-test
            gh issue comment <id> --body "<short review-fix summary and PR link>"
          If `gh pr review` fails, use `gh pr comment <n> --body "<REQUEST
          CHANGES: ...>"`, then perform the same PR and issue label updates.
          Verify the PR no longer has `ready-for-review` or `agent-approved`
-         and the issue has `changes-requested`.
+         and the issue has `changes-requested` plus `pr-open`.
       7. Append distilled cycle entry to
          agentry/logs/issues/<id>-<slug>/reviewer.log
       8. Overwrite session summary. Exit 0.
