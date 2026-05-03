@@ -26,8 +26,9 @@ $ErrorActionPreference = 'Stop'
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $TargetRoot = Split-Path -Parent $ScriptDir
 $Venv = Join-Path $ScriptDir '.venv'
+$InstallRefFile = Join-Path $Venv '.agentry-install-ref'
 $AgentryRepo = 'https://github.com/vinu-dev/agentry.git'
-$AgentryRef = 'a96ceaa'
+$AgentryRef = 'a45ab4f404c7ce4e42f3b40547415c16e2d2dd8a'
 if ($env:AGENTRY_INSTALL_REF) { $AgentryRef = $env:AGENTRY_INSTALL_REF }
 
 # Locate Python.
@@ -43,7 +44,7 @@ if (-not $python) {
     exit 1
 }
 
-# Create venv on first run; pip-install agentry into it.
+# Create venv on first run; reinstall agentry when the pinned ref changes.
 if (-not (Test-Path (Join-Path $Venv 'Scripts\python.exe'))) {
     Write-Host "==> First-time setup: creating venv at $Venv" -ForegroundColor Cyan
     & $python -m venv $Venv
@@ -52,13 +53,21 @@ if (-not (Test-Path (Join-Path $Venv 'Scripts\python.exe'))) {
         exit 1
     }
     & (Join-Path $Venv 'Scripts\python.exe') -m pip install --upgrade pip
+}
+
+$InstalledRef = ''
+if (Test-Path $InstallRefFile) {
+    $InstalledRef = (Get-Content $InstallRefFile -Raw).Trim()
+}
+if ($InstalledRef -ne $AgentryRef) {
     Write-Host "==> Installing agentry from GitHub at $AgentryRef" -ForegroundColor Cyan
-    & (Join-Path $Venv 'Scripts\python.exe') -m pip install "git+$AgentryRepo@$AgentryRef"
+    & (Join-Path $Venv 'Scripts\python.exe') -m pip install --upgrade --force-reinstall "git+$AgentryRepo@$AgentryRef"
     if ($LASTEXITCODE -ne 0) {
         Write-Host "agentry install failed" -ForegroundColor Red
         exit 1
     }
-    Write-Host "==> Setup complete" -ForegroundColor Green
+    Set-Content -Path $InstallRefFile -Value $AgentryRef -Encoding ASCII
+    Write-Host "==> Agentry install complete" -ForegroundColor Green
 }
 
 $AgentryExe = Join-Path $Venv 'Scripts\agentry.exe'

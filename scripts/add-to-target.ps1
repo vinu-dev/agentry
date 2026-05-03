@@ -92,7 +92,13 @@ foreach ($name in $agentryFiles.Keys) {
     try {
         Invoke-WebRequest -UseBasicParsing -Uri $agentryFiles[$name] -OutFile $dst
         if ($name -in @('start.ps1', 'start.sh')) {
-            (Get-Content $dst -Raw) -replace 'a96ceaa', $agentryRef |
+            $content = Get-Content $dst -Raw
+            if ($name -eq 'start.ps1') {
+                $content = $content -replace "\`$AgentryRef = '[^']+'", "`$AgentryRef = '$agentryRef'"
+            } else {
+                $content = $content -replace 'AGENTRY_REF="\$\{AGENTRY_INSTALL_REF:-[^}]+\}"', "AGENTRY_REF=`"`$`{AGENTRY_INSTALL_REF:-$agentryRef`}`""
+            }
+            $content |
                 Set-Content $dst -NoNewline
         }
         Write-OK "wrote $dst"

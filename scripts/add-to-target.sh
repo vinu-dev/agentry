@@ -65,7 +65,11 @@ for name in "${AGENTRY_FILES[@]}"; do
     if curl -fsSL "$BASE/$name" -o "$dst.tmp"; then
         mv "$dst.tmp" "$dst"
         if [[ "$name" == "start.ps1" || "$name" == "start.sh" ]]; then
-            sed "s/a96ceaa/$AGENTRY_REF/g" "$dst" > "$dst.ref" && mv "$dst.ref" "$dst"
+            if [[ "$name" == "start.ps1" ]]; then
+                sed -E "s|\\\$AgentryRef = '[^']+'|\\\$AgentryRef = '$AGENTRY_REF'|g" "$dst" > "$dst.ref" && mv "$dst.ref" "$dst"
+            else
+                sed -E "s|AGENTRY_REF=\"\\$\\{AGENTRY_INSTALL_REF:-[^}]+\\}\"|AGENTRY_REF=\"\\$\\{AGENTRY_INSTALL_REF:-$AGENTRY_REF\\}\"|g" "$dst" > "$dst.ref" && mv "$dst.ref" "$dst"
+            fi
         fi
         ok "wrote $dst"
     else
