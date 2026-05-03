@@ -159,11 +159,6 @@ To sign out of subscription credentials: `claude logout`, `codex logout`.
 
 See [LICENSE](LICENSE).
 
-## Contributors
-
-- [@vinu-dev](https://github.com/vinu-dev) — creator and maintainer
-- OpenAI Codex — implementation and review assistance
-
 ## More
 
 - [`docs/architecture.md`](docs/architecture.md) — design and architecture
