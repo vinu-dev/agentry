@@ -2,7 +2,7 @@
 
 Each role thread:
   1. Builds the prompt (per-role config.prompt or framework-generated).
-  2. Spawns the configured CLI as a subprocess with cwd = target repo root.
+  2. Spawns the configured CLI as a subprocess in the target repo or a role worktree.
   3. Supervises with stall + total timeouts.
   4. Logs the outcome to the target's ``agentry/logs/<role>/`` directory.
   5. Optionally posts a Discord event.
@@ -22,12 +22,13 @@ from __future__ import annotations
 
 import logging
 import re
+import subprocess
 import threading
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from agentry.config import AgentConfig, TargetConfig, target_logs_dir
+from agentry.config import AgentConfig, TargetConfig, target_logs_dir, target_worktrees_dir
 from agentry.github import has_open_issue_with_label, has_open_pr_with_label
 from agentry.notify import DiscordNotifier, Event
 from agentry.prompt import make_prompt
@@ -156,13 +157,24 @@ class Orchestrator:
                     return
                 continue
 
+            role_cwd = self._role_cwd(role)
+            if role_cwd is None:
+                message = "could not prepare isolated worktree; role will retry later"
+                logger.warning("role %s skipped: %s", role, message)
+                self.notifier.emit(
+                    Event(role=role, kind="worktree-error", message=message, critical=True)
+                )
+                if self.shutdown_event.wait(timeout=cfg.interval_min * 60):
+                    return
+                continue
+
             log_path = log_dir / f"{int(time.time())}.log"
             self.notifier.emit(Event(role=role, kind="started", message=f"cli={cfg.cli}"))
 
             run = supervise(
                 cli=cfg.cli,
                 args=cfg.args,
-                cwd=self.target_path,
+                cwd=role_cwd,
                 env=None,
                 stall_seconds=cfg.stall_min * 60,
                 total_seconds=cfg.total_min * 60,
@@ -215,6 +227,43 @@ class Orchestrator:
         self.notifier.emit(
             Event(role=role, kind=kind_map[run.reason], message=msg, critical=critical)
         )
+
+    def _role_cwd(self, role: str) -> Path | None:
+        if not self.target_config.isolate_worktrees:
+            return self.target_path
+
+        if not _is_git_repo(self.target_path):
+            logger.info("target is not a git repo; role %s using target path", role)
+            return self.target_path
+
+        worktree = target_worktrees_dir(self.target_path) / _safe_role_name(role)
+        if _is_git_repo(worktree):
+            return worktree
+
+        worktree.parent.mkdir(parents=True, exist_ok=True)
+        base_ref = _choose_worktree_base_ref(self.target_path)
+        logger.info("creating role worktree %s from %s", worktree, base_ref)
+        try:
+            subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(self.target_path),
+                    "worktree",
+                    "add",
+                    "--detach",
+                    str(worktree),
+                    base_ref,
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+            logger.warning("could not create worktree for role %s: %s", role, e)
+            return None
+        return worktree
 
 
 def _usage_limit_backoff_seconds(
@@ -288,6 +337,43 @@ def _no_work_message(cfg: AgentConfig) -> str:
     if not labels:
         return "empty trigger"
     return f"no matching work for {', '.join(labels)}"
+
+
+def _is_git_repo(path: Path) -> bool:
+    if not path.exists():
+        return False
+    try:
+        r = subprocess.run(
+            ["git", "-C", str(path), "rev-parse", "--is-inside-work-tree"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return r.returncode == 0 and r.stdout.strip() == "true"
+
+
+def _choose_worktree_base_ref(target_path: Path) -> str:
+    for ref in ("origin/main", "main", "HEAD"):
+        try:
+            r = subprocess.run(
+                ["git", "-C", str(target_path), "rev-parse", "--verify", ref],
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=15,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            continue
+        if r.returncode == 0:
+            return ref
+    return "HEAD"
+
+
+def _safe_role_name(role: str) -> str:
+    return re.sub(r"[^A-Za-z0-9_.-]+", "-", role).strip("-") or "role"
 
 
 __all__ = ["Orchestrator"]

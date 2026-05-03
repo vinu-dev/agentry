@@ -106,6 +106,10 @@ class TargetConfig(BaseModel):
 
     target_repo: str = Field(..., min_length=1)
     agents: dict[str, AgentConfig] = Field(..., min_length=1)
+    isolate_worktrees: bool = Field(
+        default=True,
+        description="Run each role in its own git worktree when the target is a git repo.",
+    )
     sensitive_paths: list[str] = Field(default_factory=list)
     labels: dict[str, str] = Field(default_factory=dict)
 
@@ -150,6 +154,11 @@ def target_logs_dir(target_path: Path | str) -> Path:
 def target_state_dir(target_path: Path | str) -> Path:
     """``<target>/agentry/state/`` — runtime state."""
     return target_agentry_dir(target_path) / "state"
+
+
+def target_worktrees_dir(target_path: Path | str) -> Path:
+    """``<target>/agentry/worktrees/`` — per-role git worktrees."""
+    return target_agentry_dir(target_path) / "worktrees"
 
 
 def bundled_default_config_path() -> Path:
@@ -235,4 +244,5 @@ __all__ = [
     "target_env_file",
     "target_logs_dir",
     "target_state_dir",
+    "target_worktrees_dir",
 ]

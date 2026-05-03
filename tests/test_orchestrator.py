@@ -13,12 +13,13 @@ test_notify.py. We use a no-webhook notifier so events are silently dropped.
 
 from __future__ import annotations
 
+import subprocess
 import sys
 import time
 from datetime import datetime
 from pathlib import Path
 
-from agentry.config import AgentConfig, TargetConfig, target_logs_dir
+from agentry.config import AgentConfig, TargetConfig, target_logs_dir, target_worktrees_dir
 from agentry.notify import DiscordNotifier
 from agentry.orchestrator import (
     USAGE_LIMIT_BACKOFF_FALLBACK_SECONDS,
@@ -292,3 +293,105 @@ def test_role_trigger_runs_when_pr_label_matches(monkeypatch):
     )
 
     assert _role_has_work(target_config, target_config.agents["reviewer"])
+
+
+def test_role_runs_inside_isolated_git_worktree(tmp_path: Path):
+    subprocess.run(["git", "init"], cwd=tmp_path, check=True, capture_output=True, text=True)
+    subprocess.run(
+        ["git", "config", "user.email", "test@example.com"],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "Agentry Test"],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    (tmp_path / "README.md").write_text("test target\n", encoding="utf-8")
+    subprocess.run(["git", "add", "README.md"], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-m", "initial"],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    code = (
+        "from pathlib import Path; "
+        "import os; "
+        "print(os.getcwd()); "
+        "Path('cwd.txt').write_text(os.getcwd(), encoding='utf-8')"
+    )
+    target_config = TargetConfig(
+        target_repo="test/repo",
+        agents={
+            "implementer": AgentConfig(
+                cli=sys.executable,
+                args=["-c", code],
+                interval_min=60,
+                total_min=1,
+                stall_min=1,
+                prompt="worktree",
+            ),
+        },
+    )
+    notifier = DiscordNotifier(webhook_url=None, flush_seconds=10)
+    notifier.start()
+    orch = Orchestrator(
+        target_config=target_config,
+        target_path=tmp_path,
+        notifier=notifier,
+    )
+    try:
+        orch.start()
+        worktree = target_worktrees_dir(tmp_path) / "implementer"
+        marker = worktree / "cwd.txt"
+        deadline = time.monotonic() + 30.0
+        while time.monotonic() < deadline:
+            if marker.is_file():
+                break
+            time.sleep(0.5)
+
+        assert marker.is_file()
+        assert Path(marker.read_text(encoding="utf-8")).resolve() == worktree.resolve()
+        assert not (tmp_path / "cwd.txt").exists()
+    finally:
+        orch.shutdown()
+        orch.notifier.stop(timeout=2.0)
+
+
+def test_role_cwd_returns_none_when_isolated_worktree_cannot_be_created(
+    monkeypatch,
+    tmp_path: Path,
+):
+    target_config = TargetConfig(
+        target_repo="test/repo",
+        agents={
+            "implementer": AgentConfig(
+                cli=sys.executable,
+                args=[],
+                interval_min=60,
+                total_min=1,
+                stall_min=1,
+            ),
+        },
+    )
+    orch = Orchestrator(
+        target_config=target_config,
+        target_path=tmp_path,
+        notifier=DiscordNotifier(webhook_url=None),
+    )
+    monkeypatch.setattr("agentry.orchestrator._is_git_repo", lambda path: path == tmp_path)
+    monkeypatch.setattr("agentry.orchestrator._choose_worktree_base_ref", lambda path: "HEAD")
+
+    def fail_worktree_add(*args, **kwargs):
+        raise subprocess.CalledProcessError(128, args[0], stderr="nope")
+
+    monkeypatch.setattr("agentry.orchestrator.subprocess.run", fail_worktree_add)
+
+    assert orch._role_cwd("implementer") is None

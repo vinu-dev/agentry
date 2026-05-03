@@ -32,6 +32,7 @@
 # run, which prevents scheduled discovery roles from firing on every reboot.
 
 target_repo: <owner>/<repo>           # filled in by add-to-target per repo
+isolate_worktrees: true              # one git worktree per role for safe parallelism
 
 agents:
 
