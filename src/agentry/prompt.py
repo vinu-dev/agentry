@@ -29,6 +29,9 @@ RUNTIME_CONTRACT = """\
 - When moving work out of a blocked/retry state after a successful correction or
   approval, remove stale blocking labels such as `blocked`, `changes-requested`,
   and `tests-failed` from the relevant issue or PR.
+- Before creating a PR for a feature branch, check whether an open PR already
+  exists for that branch. Reuse and relabel the existing PR instead of creating
+  a duplicate.
 """
 
 
