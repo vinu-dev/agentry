@@ -291,7 +291,7 @@ def status(target_path: Path) -> None:
         click.echo(f"  {role}: {len(all_logs)} runs total")
         for p in latest:
             size = p.stat().st_size
-            click.echo(f"    └─ {p.name} ({size} bytes)")
+            click.echo(f"    - {p.name} ({size} bytes)")
 
 
 # -----------------------------------------------------------------------------

@@ -59,3 +59,16 @@ def test_doctor_init_labels_includes_configured_label(tmp_path: Path, monkeypatc
 
     assert result.exit_code == 0
     assert "team-custom-stage" in captured
+
+
+def test_status_uses_ascii_log_bullets(tmp_path: Path):
+    _write_config(tmp_path)
+    log_dir = tmp_path / "agentry" / "logs" / "architect"
+    log_dir.mkdir(parents=True)
+    (log_dir / "123.log").write_text("hello\n", encoding="utf-8")
+
+    result = CliRunner().invoke(cli_module.cli, ["status", "--target", str(tmp_path)])
+
+    assert result.exit_code == 0
+    assert "    - 123.log" in result.output
+    assert "└" not in result.output
