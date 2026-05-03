@@ -1,12 +1,9 @@
 # Agentry - How to Use
 
-Status: **v0.1 alpha**
-
 Agentry is installed per target repository. You drop an `agentry/` folder into
 the repo, configure roles, add secrets locally, and run the foreground start
 script when you want the agent pipeline active. There is no host daemon,
-`agentry service install`, `agentry init`, or `agentry target add` command in
-v0.1.
+service installer, `agentry init`, or `agentry target add` command.
 
 ---
 
@@ -186,7 +183,16 @@ create one yourself.
 ## Daily Operation
 
 Use `agentry status --target .` to inspect role sessions, run mode, recent
-logs, and token-budget state.
+logs, and token-budget state. From a fresh target where the venv may not exist
+yet, use the start script wrapper:
+
+```powershell
+.\agentry\start.ps1 status --target .
+```
+
+```bash
+./agentry/start.sh status --target .
+```
 
 Use `agentry stop --target . ROLE` to stop one running role, or
 `agentry stop --target . --all` to stop all recorded running sessions. The stop
@@ -194,7 +200,8 @@ path is conservative: completed or stale session files are not used to kill old
 PIDs.
 
 Use `agentry gui --target .` for a local status/configuration dashboard at
-`http://127.0.0.1:4783`.
+`http://127.0.0.1:4783`, or launch it through the start script wrapper shown
+above.
 
 Per-role stdout logs are written to:
 

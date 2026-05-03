@@ -16,10 +16,21 @@
 # in series, and adds traceability_tracker as the last gate before merge.
 
 target_repo: org/medical-device-product
+mode: pipeline
+isolate_worktrees: true
+
+automation:
+  auto_merge: false
+  stop_when_queue_empty: false
+
+research:
+  allow_create_issues: false
+  max_open_ready_for_design: 2
 
 agents:
 
   researcher:
+    enabled: false
     cli: claude
     args: ["-p", "--dangerously-skip-permissions"]
     interval_min: 240          # 4 hours — medical projects iterate slower
@@ -236,6 +247,18 @@ agents:
 
 # Sensitive paths — Reviewer rule files reference these to know when to label
 # `blocked` instead of approving.
+labels:
+  needs-risk: needs-risk
+  ready-for-code-review: ready-for-code-review
+  ready-for-quality-review: ready-for-quality-review
+  ready-for-cyber-review: ready-for-cyber-review
+  ready-for-regulatory-review: ready-for-regulatory-review
+  ready-for-traceability: ready-for-traceability
+  ready-for-merge: ready-for-merge
+  blocked-cyber: blocked-cyber
+  blocked-regulatory: blocked-regulatory
+  blocked-traceability: blocked-traceability
+
 sensitive_paths:
   - "**/auth/**"
   - "**/crypto/**"

@@ -182,6 +182,14 @@ Next:
 
          iwr -useb https://raw.githubusercontent.com/vinu-dev/agentry/main/scripts/add-to-target.ps1 | iex
 
+  3. Configure or inspect the target without starting agents:
+
+         .\agentry\start.ps1 gui --target .
+
+     Then start agents only when you want them active:
+
+         .\agentry\start.ps1
+
 If 'claude' / 'codex' weren't on PATH above, open a new shell first.
 
 "@ -ForegroundColor Cyan
