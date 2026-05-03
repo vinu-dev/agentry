@@ -8,6 +8,14 @@
 #   - distilled per-issue log writing
 #   - session-continuity write
 #
+# Agentry's check-in protocol: when an agent's stall_min or total_min
+# threshold hits, the orchestrator sends an AGENTRY-CHECKIN: message via
+# stdin (stream-json input mode for claude). The agent must reply with one
+# of STATUS:WORKING / STATUS:DONE / STATUS:BLOCKED <reason> /
+# STATUS:NEEDMORETIME N — the orchestrator extends the budget, accepts
+# completion, or stops the agent based on the reply. Killing is the LAST
+# resort, only used when the agent fails to respond to the check-in.
+#
 # Agentry's branch model: ONE shared `feature/<id>-<slug>` branch per issue.
 # Architect creates it, Implementer/Tester/Reviewer rebase on `origin/main`
 # at the start of THEIR cycle and add their commits. Branch protection on
@@ -23,7 +31,7 @@ agents:
 
   researcher:
     cli: claude
-    args: ["-p", "--dangerously-skip-permissions"]
+    args: ["-p", "--input-format=stream-json", "--output-format=stream-json", "--verbose", "--dangerously-skip-permissions"]
     interval_min: 60
     total_min: 30
     stall_min: 30        # = total_min: no stall-kill, only total-timeout safety
@@ -83,6 +91,24 @@ agents:
       - Don't open issues requiring regulatory clearance, hardware
         redesign, or major architecture rework — those need humans.
 
+      ## Check-in protocol (universal — read carefully)
+
+      The orchestrator may send a check-in message during your run. If you
+      receive a user message starting with "AGENTRY-CHECKIN:", reply
+      IMMEDIATELY (before continuing other work) with EXACTLY ONE LINE in
+      one of these forms:
+
+        STATUS:WORKING
+        STATUS:DONE
+        STATUS:BLOCKED <one-line reason>
+        STATUS:NEEDMORETIME <integer minutes>
+
+      After replying, continue your work normally if WORKING or
+      NEEDMORETIME. The orchestrator parses the FIRST STATUS: line in your
+      reply and decides whether to extend your time, accept your
+      completion, or stop you. Killing is the LAST resort, only used when
+      you fail to respond to the check-in.
+
       ## Project specifics
 
       Read docs/ai/roles/researcher.md for:
@@ -95,7 +121,7 @@ agents:
 
   architect:
     cli: claude
-    args: ["-p", "--dangerously-skip-permissions"]
+    args: ["-p", "--input-format=stream-json", "--output-format=stream-json", "--verbose", "--dangerously-skip-permissions"]
     interval_min: 5
     total_min: 30
     stall_min: 30        # = total_min
@@ -158,6 +184,24 @@ agents:
       - Don't change docs/ai/ (canonical policy).
       - Never push to main.
 
+      ## Check-in protocol (universal — read carefully)
+
+      The orchestrator may send a check-in message during your run. If you
+      receive a user message starting with "AGENTRY-CHECKIN:", reply
+      IMMEDIATELY (before continuing other work) with EXACTLY ONE LINE in
+      one of these forms:
+
+        STATUS:WORKING
+        STATUS:DONE
+        STATUS:BLOCKED <one-line reason>
+        STATUS:NEEDMORETIME <integer minutes>
+
+      After replying, continue your work normally if WORKING or
+      NEEDMORETIME. The orchestrator parses the FIRST STATUS: line in your
+      reply and decides whether to extend your time, accept your
+      completion, or stop you. Killing is the LAST resort, only used when
+      you fail to respond to the check-in.
+
       ## Project specifics
 
       Read docs/ai/roles/architect.md for:
@@ -171,7 +215,7 @@ agents:
 
   implementer:
     cli: claude                       # claude.cmd on Windows
-    args: ["-p", "--dangerously-skip-permissions"]
+    args: ["-p", "--input-format=stream-json", "--output-format=stream-json", "--verbose", "--dangerously-skip-permissions"]
     interval_min: 5
     total_min: 60
     stall_min: 60        # = total_min
@@ -230,6 +274,24 @@ agents:
       - Hardware-only behavior → write what unit/integration tests you can,
         let Tester decide on `needs-hardware-verification`.
 
+      ## Check-in protocol (universal — read carefully)
+
+      The orchestrator may send a check-in message during your run. If you
+      receive a user message starting with "AGENTRY-CHECKIN:", reply
+      IMMEDIATELY (before continuing other work) with EXACTLY ONE LINE in
+      one of these forms:
+
+        STATUS:WORKING
+        STATUS:DONE
+        STATUS:BLOCKED <one-line reason>
+        STATUS:NEEDMORETIME <integer minutes>
+
+      After replying, continue your work normally if WORKING or
+      NEEDMORETIME. The orchestrator parses the FIRST STATUS: line in your
+      reply and decides whether to extend your time, accept your
+      completion, or stop you. Killing is the LAST resort, only used when
+      you fail to respond to the check-in.
+
       ## Project specifics
 
       Read docs/ai/roles/implementer.md for:
@@ -243,7 +305,7 @@ agents:
 
   tester:
     cli: claude
-    args: ["-p", "--dangerously-skip-permissions"]
+    args: ["-p", "--input-format=stream-json", "--output-format=stream-json", "--verbose", "--dangerously-skip-permissions"]
     interval_min: 5
     total_min: 30
     stall_min: 30        # = total_min
@@ -296,6 +358,24 @@ agents:
       - Don't lower coverage thresholds.
       - One issue per run.
 
+      ## Check-in protocol (universal — read carefully)
+
+      The orchestrator may send a check-in message during your run. If you
+      receive a user message starting with "AGENTRY-CHECKIN:", reply
+      IMMEDIATELY (before continuing other work) with EXACTLY ONE LINE in
+      one of these forms:
+
+        STATUS:WORKING
+        STATUS:DONE
+        STATUS:BLOCKED <one-line reason>
+        STATUS:NEEDMORETIME <integer minutes>
+
+      After replying, continue your work normally if WORKING or
+      NEEDMORETIME. The orchestrator parses the FIRST STATUS: line in your
+      reply and decides whether to extend your time, accept your
+      completion, or stop you. Killing is the LAST resort, only used when
+      you fail to respond to the check-in.
+
       ## Project specifics
 
       Read docs/ai/roles/tester.md for:
@@ -309,7 +389,7 @@ agents:
 
   reviewer:
     cli: claude
-    args: ["-p", "--dangerously-skip-permissions"]
+    args: ["-p", "--input-format=stream-json", "--output-format=stream-json", "--verbose", "--dangerously-skip-permissions"]
     interval_min: 5
     total_min: 20
     stall_min: 20        # = total_min
@@ -365,6 +445,24 @@ agents:
         block.
       - Don't dismiss prior human reviews.
 
+      ## Check-in protocol (universal — read carefully)
+
+      The orchestrator may send a check-in message during your run. If you
+      receive a user message starting with "AGENTRY-CHECKIN:", reply
+      IMMEDIATELY (before continuing other work) with EXACTLY ONE LINE in
+      one of these forms:
+
+        STATUS:WORKING
+        STATUS:DONE
+        STATUS:BLOCKED <one-line reason>
+        STATUS:NEEDMORETIME <integer minutes>
+
+      After replying, continue your work normally if WORKING or
+      NEEDMORETIME. The orchestrator parses the FIRST STATUS: line in your
+      reply and decides whether to extend your time, accept your
+      completion, or stop you. Killing is the LAST resort, only used when
+      you fail to respond to the check-in.
+
       ## Project specifics
 
       Read docs/ai/roles/reviewer.md for:
@@ -377,7 +475,7 @@ agents:
 
   release:
     cli: claude
-    args: ["-p", "--dangerously-skip-permissions"]
+    args: ["-p", "--input-format=stream-json", "--output-format=stream-json", "--verbose", "--dangerously-skip-permissions"]
     interval_min: 1440
     total_min: 60
     stall_min: 60        # = total_min
@@ -404,6 +502,24 @@ agents:
       - Never release without a release plan.
       - Never bypass hardware sign-off.
       - Never release if any blocker is open in scope.
+
+      ## Check-in protocol (universal — read carefully)
+
+      The orchestrator may send a check-in message during your run. If you
+      receive a user message starting with "AGENTRY-CHECKIN:", reply
+      IMMEDIATELY (before continuing other work) with EXACTLY ONE LINE in
+      one of these forms:
+
+        STATUS:WORKING
+        STATUS:DONE
+        STATUS:BLOCKED <one-line reason>
+        STATUS:NEEDMORETIME <integer minutes>
+
+      After replying, continue your work normally if WORKING or
+      NEEDMORETIME. The orchestrator parses the FIRST STATUS: line in your
+      reply and decides whether to extend your time, accept your
+      completion, or stop you. Killing is the LAST resort, only used when
+      you fail to respond to the check-in.
 
       ## Project specifics
 
