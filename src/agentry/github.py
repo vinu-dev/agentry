@@ -32,6 +32,7 @@ STANDARD_LABELS: dict[str, str] = {
     "merge-conflict": "d93f0b",  # red
     "needs-rebase": "fbca04",  # yellow
     "needs-hardware-verification": "c5def5",  # light blue
+    "release-approved": "5319e7",  # purple
 }
 
 
@@ -89,6 +90,76 @@ def list_labels(target_repo: str) -> set[str]:
         return set()
 
 
+def has_open_issue_with_label(target_repo: str, label: str) -> bool:
+    """Return True when an open issue with ``label`` exists."""
+    if not gh_available():
+        return False
+    try:
+        r = subprocess.run(
+            [
+                "gh",
+                "issue",
+                "list",
+                "--repo",
+                target_repo,
+                "--state",
+                "open",
+                "--label",
+                label,
+                "--limit",
+                "1",
+                "--json",
+                "number",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+        logger.warning("gh issue list failed for %s label %s: %s", target_repo, label, e)
+        return False
+    try:
+        return bool(json.loads(r.stdout))
+    except json.JSONDecodeError:
+        return False
+
+
+def has_open_pr_with_label(target_repo: str, label: str) -> bool:
+    """Return True when an open pull request with ``label`` exists."""
+    if not gh_available():
+        return False
+    try:
+        r = subprocess.run(
+            [
+                "gh",
+                "pr",
+                "list",
+                "--repo",
+                target_repo,
+                "--state",
+                "open",
+                "--label",
+                label,
+                "--limit",
+                "1",
+                "--json",
+                "number",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+        logger.warning("gh pr list failed for %s label %s: %s", target_repo, label, e)
+        return False
+    try:
+        return bool(json.loads(r.stdout))
+    except json.JSONDecodeError:
+        return False
+
+
 def create_label(target_repo: str, name: str, color: str = "ededed") -> bool:
     """Create ``name`` label in ``target_repo``. Returns True on success.
 
@@ -135,6 +206,8 @@ __all__ = [
     "STANDARD_LABELS",
     "create_label",
     "gh_available",
+    "has_open_issue_with_label",
+    "has_open_pr_with_label",
     "init_labels",
     "list_labels",
     "repo_exists",

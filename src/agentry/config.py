@@ -27,23 +27,62 @@ from importlib.resources import files
 from pathlib import Path
 
 import yaml
-from pydantic import BaseModel, Field, ValidationError, field_validator
+from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
 # -----------------------------------------------------------------------------
 # Pydantic models
 # -----------------------------------------------------------------------------
 
 
+class AgentTriggerConfig(BaseModel):
+    """Cheap preflight gates checked before starting an LLM role."""
+
+    issue_labels: list[str] = Field(
+        default_factory=list,
+        description="Run only when an open issue has at least one of these labels.",
+    )
+    pr_labels: list[str] = Field(
+        default_factory=list,
+        description="Run only when an open pull request has at least one of these labels.",
+    )
+
+    @field_validator("issue_labels", "pr_labels")
+    @classmethod
+    def _non_empty_labels(cls, v: list[str]) -> list[str]:
+        cleaned = [label.strip() for label in v if label.strip()]
+        if len(cleaned) != len(v):
+            raise ValueError("trigger labels cannot be empty")
+        return cleaned
+
+    @model_validator(mode="after")
+    def _at_least_one_gate(self) -> AgentTriggerConfig:
+        if not self.issue_labels and not self.pr_labels:
+            raise ValueError("trigger must declare issue_labels or pr_labels")
+        return self
+
+
 class AgentConfig(BaseModel):
     """Per-role configuration block in ``agentry/config.yml``."""
 
+    enabled: bool = Field(
+        default=True,
+        description="When false, Agentry does not start or validate this role.",
+    )
     cli: str = Field(..., min_length=1, description="Binary name or absolute path")
     args: list[str] = Field(default_factory=list, description="Arguments passed before the prompt")
     interval_min: int = Field(
         ..., gt=0, description="Sleep N minutes between subprocess invocations"
     )
+    run_on_start: bool = Field(
+        default=True,
+        description="When false, wait interval_min before the first run after startup.",
+    )
     total_min: int = Field(..., gt=0, description="Kill subprocess if it exceeds N minutes total")
     stall_min: int = Field(..., gt=0, description="Kill subprocess if no stdout for N minutes")
+    trigger: AgentTriggerConfig | None = Field(
+        default=None,
+        description="Optional cheap GitHub gate; if no matching work exists, skip the LLM run.",
+    )
     prompt: str | None = Field(
         default=None,
         description=(

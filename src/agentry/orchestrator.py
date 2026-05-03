@@ -28,6 +28,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from agentry.config import AgentConfig, TargetConfig, target_logs_dir
+from agentry.github import has_open_issue_with_label, has_open_pr_with_label
 from agentry.notify import DiscordNotifier, Event
 from agentry.prompt import make_prompt
 from agentry.supervisor import ExitReason, supervise
@@ -58,8 +59,18 @@ class Orchestrator:
         self._threads: list[threading.Thread] = []
 
     def start(self) -> None:
-        all_roles = sorted(self.target_config.agents.keys())
+        enabled_agents = {
+            role: cfg for role, cfg in self.target_config.agents.items() if cfg.enabled
+        }
+        all_roles = sorted(enabled_agents.keys())
+        disabled_roles = sorted(
+            role for role, cfg in self.target_config.agents.items() if not cfg.enabled
+        )
+        for role in disabled_roles:
+            logger.info("role %s disabled; not starting thread", role)
         for role, cfg in self.target_config.agents.items():
+            if not cfg.enabled:
+                continue
             t = threading.Thread(
                 target=self._role_loop_with_recovery,
                 args=(role, cfg, all_roles),
@@ -124,7 +135,27 @@ class Orchestrator:
         log_dir = target_logs_dir(self.target_path) / role
         log_dir.mkdir(parents=True, exist_ok=True)
 
+        if not cfg.run_on_start:
+            logger.info("role %s waiting %d minutes before first run", role, cfg.interval_min)
+            self.notifier.emit(
+                Event(
+                    role=role,
+                    kind="deferred",
+                    message=f"first run deferred for {cfg.interval_min} minutes",
+                )
+            )
+            if self.shutdown_event.wait(timeout=cfg.interval_min * 60):
+                return
+
         while not self.shutdown_event.is_set():
+            if not _role_has_work(self.target_config, cfg):
+                message = _no_work_message(cfg)
+                logger.info("role %s skipped: %s", role, message)
+                self.notifier.emit(Event(role=role, kind="no-work", message=message))
+                if self.shutdown_event.wait(timeout=cfg.interval_min * 60):
+                    return
+                continue
+
             log_path = log_dir / f"{int(time.time())}.log"
             self.notifier.emit(Event(role=role, kind="started", message=f"cli={cfg.cli}"))
 
@@ -229,6 +260,34 @@ def _read_log_tail(log_path: Path, max_bytes: int = 65536) -> str:
             f.seek(size - max_bytes)
         data = f.read()
     return data.decode("utf-8", errors="replace")
+
+
+def _role_has_work(target_config: TargetConfig, cfg: AgentConfig) -> bool:
+    """Cheaply decide whether a role should spend an LLM run."""
+    trigger = cfg.trigger
+    if trigger is None:
+        return True
+
+    for label in trigger.issue_labels:
+        if has_open_issue_with_label(target_config.target_repo, label):
+            return True
+    for label in trigger.pr_labels:
+        if has_open_pr_with_label(target_config.target_repo, label):
+            return True
+    return False
+
+
+def _no_work_message(cfg: AgentConfig) -> str:
+    trigger = cfg.trigger
+    if trigger is None:
+        return "no trigger configured"
+
+    labels: list[str] = []
+    labels.extend(f"issue:{label}" for label in trigger.issue_labels)
+    labels.extend(f"pr:{label}" for label in trigger.pr_labels)
+    if not labels:
+        return "empty trigger"
+    return f"no matching work for {', '.join(labels)}"
 
 
 __all__ = ["Orchestrator"]

@@ -24,6 +24,12 @@
 # The rule file at docs/ai/roles/<role>.md is for PROJECT-SPECIFIC guidance
 # only (mission, anti-goals, validation matrix, sensitive paths, traceability,
 # review criteria). The orchestrator workflow lives here in the prompt.
+#
+# Expensive LLM runs are gated by cheap scheduler checks:
+#   trigger.issue_labels -> run only when a matching open issue exists
+#   trigger.pr_labels    -> run only when a matching open PR exists
+# Roles with run_on_start: false sleep their first interval before the first
+# run, which prevents scheduled discovery roles from firing on every reboot.
 
 target_repo: <owner>/<repo>           # filled in by add-to-target per repo
 
@@ -32,7 +38,10 @@ agents:
   researcher:
     cli: claude
     args: ["-p", "--input-format=stream-json", "--output-format=stream-json", "--verbose", "--dangerously-skip-permissions"]
-    interval_min: 60
+    # Research is intentionally scheduled, not startup-triggered: it is the
+    # highest-token role and should not run every time the host reboots.
+    run_on_start: false
+    interval_min: 1440
     total_min: 30
     stall_min: 30        # = total_min: no stall-kill, only total-timeout safety
     prompt: |
@@ -122,6 +131,8 @@ agents:
   architect:
     cli: claude
     args: ["-p", "--input-format=stream-json", "--output-format=stream-json", "--verbose", "--dangerously-skip-permissions"]
+    trigger:
+      issue_labels: ["ready-for-design"]
     interval_min: 5
     total_min: 30
     stall_min: 30        # = total_min
@@ -216,6 +227,8 @@ agents:
   implementer:
     cli: claude                       # claude.cmd on Windows
     args: ["-p", "--input-format=stream-json", "--output-format=stream-json", "--verbose", "--dangerously-skip-permissions"]
+    trigger:
+      issue_labels: ["ready-for-implementation", "tests-failed"]
     interval_min: 5
     total_min: 60
     stall_min: 60        # = total_min
@@ -306,6 +319,8 @@ agents:
   tester:
     cli: claude
     args: ["-p", "--input-format=stream-json", "--output-format=stream-json", "--verbose", "--dangerously-skip-permissions"]
+    trigger:
+      issue_labels: ["ready-for-test"]
     interval_min: 5
     total_min: 30
     stall_min: 30        # = total_min
@@ -390,6 +405,8 @@ agents:
   reviewer:
     cli: claude
     args: ["-p", "--input-format=stream-json", "--output-format=stream-json", "--verbose", "--dangerously-skip-permissions"]
+    trigger:
+      pr_labels: ["ready-for-review"]
     interval_min: 5
     total_min: 20
     stall_min: 20        # = total_min
@@ -476,6 +493,8 @@ agents:
   release:
     cli: claude
     args: ["-p", "--input-format=stream-json", "--output-format=stream-json", "--verbose", "--dangerously-skip-permissions"]
+    trigger:
+      issue_labels: ["release-approved"]
     interval_min: 1440
     total_min: 60
     stall_min: 60        # = total_min

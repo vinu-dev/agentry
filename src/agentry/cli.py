@@ -106,7 +106,10 @@ def doctor(target_path: Path, init_labels_flag: bool) -> None:
         click.secho(f"OK    {target_config_file(target_path)} present and valid", fg="green")
 
     # 2. Role rule files.
-    for role in target_config.agents:
+    for role, cfg in target_config.agents.items():
+        if not cfg.enabled:
+            click.secho(f"SKIP  role {role} disabled", fg="cyan")
+            continue
         rule = role_rule_path(target_path, role)
         if rule.is_file():
             target_specific = (target_path / "docs" / "ai" / "roles" / f"{role}.md").is_file()
@@ -118,6 +121,8 @@ def doctor(target_path: Path, init_labels_flag: bool) -> None:
 
     # 3. CLIs on PATH.
     for role, cfg in target_config.agents.items():
+        if not cfg.enabled:
+            continue
         if shutil.which(cfg.cli):
             click.secho(f"OK    role {role} cli {cfg.cli!r} found on PATH", fg="green")
         else:
@@ -243,7 +248,9 @@ def start(target_path: Path) -> None:
             pass
 
     click.secho(
-        f"agentry started for {target_config.target_repo} ({len(target_config.agents)} roles)\n"
+        f"agentry started for {target_config.target_repo} "
+        f"({sum(1 for cfg in target_config.agents.values() if cfg.enabled)} enabled roles, "
+        f"{sum(1 for cfg in target_config.agents.values() if not cfg.enabled)} disabled)\n"
         f"  target: {target_path}\n"
         f"  logs:   {target_logs_dir(target_path)}\n"
         "press Ctrl-C to stop.",
@@ -276,9 +283,15 @@ def status(target_path: Path) -> None:
     click.echo(f"target:    {target_config.target_repo}")
     click.echo(f"path:      {target_path}")
     click.echo(f"logs:      {log_root}")
-    click.echo(f"roles ({len(target_config.agents)}):")
+    enabled_count = sum(1 for cfg in target_config.agents.values() if cfg.enabled)
+    disabled_count = len(target_config.agents) - enabled_count
+    click.echo(f"roles ({enabled_count} enabled, {disabled_count} disabled):")
 
     for role in sorted(target_config.agents):
+        cfg = target_config.agents[role]
+        if not cfg.enabled:
+            click.secho(f"  {role}: disabled", fg="cyan")
+            continue
         role_logs = log_root / role
         if not role_logs.is_dir():
             click.secho(f"  {role}: no log dir yet", fg="yellow")

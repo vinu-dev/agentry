@@ -435,7 +435,6 @@ def _supervise_streamjson(
                     text_buffer=text_buffer,
                     text_buffer_lock=text_buffer_lock,
                     last_event_lock=last_event_lock,
-                    last_event_at_ref=lambda: last_event_at,
                     response_timeout=checkin_response_seconds,
                     log_file=log_file,
                 )
@@ -547,7 +546,6 @@ def _do_checkin(
     text_buffer: list[str],
     text_buffer_lock: threading.Lock,
     last_event_lock: threading.Lock,  # unused but kept for signature symmetry
-    last_event_at_ref,  # callable returning current last_event_at
     response_timeout: float,
     log_file: IOBase,
 ) -> tuple[str, object]:
