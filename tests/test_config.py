@@ -19,6 +19,7 @@ from agentry.config import (
     target_env_file,
     target_logs_dir,
     target_state_dir,
+    target_worktrees_dir,
 )
 
 
@@ -103,6 +104,7 @@ class TestTargetConfig:
         )
         assert cfg.target_repo == "user/repo"
         assert "architect" in cfg.agents
+        assert cfg.isolate_worktrees is True
 
     def test_zero_agents_rejected(self):
         with pytest.raises(ValidationError):
@@ -201,6 +203,7 @@ class TestTargetPaths:
     def test_state_and_logs_inside_target(self, tmp_path: Path):
         assert target_state_dir(tmp_path) == tmp_path / "agentry" / "state"
         assert target_logs_dir(tmp_path) == tmp_path / "agentry" / "logs"
+        assert target_worktrees_dir(tmp_path) == tmp_path / "agentry" / "worktrees"
 
     def test_paths_resolve_string_inputs(self, tmp_path: Path):
         # Should accept Path or str
