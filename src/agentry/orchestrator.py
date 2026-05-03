@@ -21,8 +21,10 @@ down the whole pipeline.
 from __future__ import annotations
 
 import logging
+import re
 import threading
 import time
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from agentry.config import AgentConfig, TargetConfig, target_logs_dir
@@ -31,6 +33,13 @@ from agentry.prompt import make_prompt
 from agentry.supervisor import ExitReason, supervise
 
 logger = logging.getLogger(__name__)
+
+USAGE_LIMIT_BACKOFF_FALLBACK_SECONDS = 4 * 60 * 60
+_USAGE_LIMIT_RE = re.compile(
+    r"you've hit your usage limit.*?try again at\s+"
+    r"(?P<hour>\d{1,2}):(?P<minute>\d{2})\s*(?P<ampm>[AP]M)",
+    re.IGNORECASE | re.DOTALL,
+)
 
 
 class Orchestrator:
@@ -136,7 +145,20 @@ class Orchestrator:
             if run.reason == ExitReason.INTERRUPTED:
                 return
 
-            sleep_seconds = cfg.interval_min * 60
+            sleep_seconds = _usage_limit_backoff_seconds(run.stdout_path)
+            if sleep_seconds is not None:
+                minutes = max(1, round(sleep_seconds / 60))
+                logger.warning("role %s hit usage limit; backing off for %d minutes", role, minutes)
+                self.notifier.emit(
+                    Event(
+                        role=role,
+                        kind="usage-limit",
+                        message=f"usage limit hit; retrying in ~{minutes} minutes",
+                        critical=False,
+                    )
+                )
+            else:
+                sleep_seconds = cfg.interval_min * 60
             if self.shutdown_event.wait(timeout=sleep_seconds):
                 return
 
@@ -162,6 +184,51 @@ class Orchestrator:
         self.notifier.emit(
             Event(role=role, kind=kind_map[run.reason], message=msg, critical=critical)
         )
+
+
+def _usage_limit_backoff_seconds(
+    log_path: Path | None,
+    *,
+    now: datetime | None = None,
+) -> float | None:
+    """Return a retry delay when a role log contains a Codex usage-limit reset."""
+    if log_path is None or not log_path.is_file():
+        return None
+
+    text = _read_log_tail(log_path)
+    if "hit your usage limit" not in text.lower():
+        return None
+
+    now = now or datetime.now()
+    match = _USAGE_LIMIT_RE.search(text)
+    if not match:
+        return USAGE_LIMIT_BACKOFF_FALLBACK_SECONDS
+
+    hour = int(match.group("hour"))
+    minute = int(match.group("minute"))
+    ampm = match.group("ampm").upper()
+    if ampm == "PM" and hour != 12:
+        hour += 12
+    elif ampm == "AM" and hour == 12:
+        hour = 0
+
+    retry_at = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    if retry_at <= now:
+        retry_at += timedelta(days=1)
+
+    # Add a small buffer so every role does not hammer the CLI at the exact
+    # reset minute. Keep malformed/far-future clocks bounded.
+    delay = (retry_at - now).total_seconds() + 5 * 60
+    return max(15 * 60, min(delay, 24 * 60 * 60))
+
+
+def _read_log_tail(log_path: Path, max_bytes: int = 65536) -> str:
+    size = log_path.stat().st_size
+    with log_path.open("rb") as f:
+        if size > max_bytes:
+            f.seek(size - max_bytes)
+        data = f.read()
+    return data.decode("utf-8", errors="replace")
 
 
 __all__ = ["Orchestrator"]
