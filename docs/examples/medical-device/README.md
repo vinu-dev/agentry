@@ -46,6 +46,7 @@ needs-risk
   -> implementer
   -> ready-for-test
   -> tester
+  -> pr-open
   -> ready-for-code-review
   -> code_reviewer
   -> ready-for-quality-review

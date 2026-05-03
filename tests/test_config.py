@@ -180,6 +180,11 @@ class TestBundledDefaults:
         assert "agent-approved" in text
         assert "GitHub refuses self-review" in text
 
+    def test_bundled_tester_keeps_issue_visible_after_pr_creation(self):
+        text = bundled_default_role_path("tester").read_text(encoding="utf-8")
+        assert "pr-open" in text
+        assert "ready-for-review" in text
+
     def test_role_rule_path_falls_back_to_bundled(self, tmp_path: Path):
         path = role_rule_path(tmp_path, "architect")
         # tmp_path has no docs/ai/roles/, so fallback kicks in.

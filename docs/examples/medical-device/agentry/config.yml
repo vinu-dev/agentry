@@ -121,8 +121,9 @@ agents:
 
       Your input: GitHub issues labeled `ready-for-test` (oldest first).
       Your output: run unit + integration + (if applicable) HIL tests. If
-      green, open a PR labeled `ready-for-code-review`. If red, label the
-      issue `tests-failed` and comment with the failure output.
+      green, add `pr-open` to the issue and open a PR labeled
+      `ready-for-code-review`. If red, label the issue `tests-failed` and
+      comment with the failure output.
 
       Read docs/ai/roles/tester.md for test commands, HIL setup, and
       coverage thresholds (IEC 62304 software unit testing). Exit when no
@@ -248,6 +249,7 @@ agents:
 # Sensitive paths — Reviewer rule files reference these to know when to label
 # `blocked` instead of approving.
 labels:
+  pr-open: pr-open
   needs-risk: needs-risk
   ready-for-code-review: ready-for-code-review
   ready-for-quality-review: ready-for-quality-review

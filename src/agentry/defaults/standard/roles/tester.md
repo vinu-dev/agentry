@@ -18,7 +18,8 @@ Find issues labeled `ready-for-test`. Process oldest first. If none, exit immedi
    - Open a PR titled `[<id>] <issue-title>` from the implementer's branch to `main`
    - PR body: link to issue, link to design doc, summary of changes
    - Add label `ready-for-review` to the PR
-   - On the issue: remove `ready-for-test` (the PR now owns the lifecycle)
+   - On the issue: add `pr-open` and remove `ready-for-test` (the PR now owns
+     the lifecycle)
 5. If any test failed:
    - On the issue: replace label `ready-for-test` with `tests-failed`
    - Add a comment with the test output (or link to logs)

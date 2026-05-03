@@ -20,8 +20,8 @@ Find PRs labeled `ready-for-review`. Process oldest first. If none, exit immedia
    - **Style**: does it follow project conventions?
    - **Edge cases**: does it handle obvious failure modes?
 6. Outcome:
-   - **All good:** approve via `gh pr review --approve` if GitHub allows it. Whether formal approval succeeds or GitHub refuses self-review, add label `agent-approved`, remove `ready-for-review` and `blocked`, and post/verify a concise approval summary.
-   - **Issues found, fixable:** request changes via `gh pr review --request-changes` if possible. If formal review fails, post a PR comment beginning `Agentry review outcome: REQUEST CHANGES`. Remove `agent-approved`, add `blocked`, remove `ready-for-review`, and move the linked issue to `changes-requested`.
+   - **All good:** approve via `gh pr review --approve` if GitHub allows it. Whether formal approval succeeds or GitHub refuses self-review, add label `agent-approved`, remove `ready-for-review` and `blocked`, keep the linked issue labeled `pr-open`, and post/verify a concise approval summary.
+   - **Issues found, fixable:** request changes via `gh pr review --request-changes` if possible. If formal review fails, post a PR comment beginning `Agentry review outcome: REQUEST CHANGES`. Remove `agent-approved`, add `blocked`, remove `ready-for-review`, and move the linked issue to `changes-requested` while keeping `pr-open`.
    - **Issues found, fundamental:** remove `agent-approved`, add label `blocked` to PR, comment with the rationale. Operator will decide.
 7. Exit with code 0.
 
