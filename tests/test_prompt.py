@@ -67,6 +67,7 @@ class TestMakePrompt:
         assert "Do not use GitHub app connectors" in RUNTIME_CONTRACT
         assert "remove stale blocking labels" in RUNTIME_CONTRACT
         assert "`blocked`" in RUNTIME_CONTRACT
+        assert "open PR already" in RUNTIME_CONTRACT
 
     def test_build_role_prompt_wraps_custom_prompt(self):
         out = build_role_prompt("reviewer", ["reviewer"], "CUSTOM ROLE BODY")
