@@ -225,7 +225,13 @@ def _spawn(
         "stdout": subprocess.PIPE,
         "stderr": subprocess.STDOUT,
         "stdin": subprocess.PIPE if stdin_input is not None else subprocess.DEVNULL,
-        "text": True,
+        # Force UTF-8 on the pipes. `text=True` alone uses
+        # locale.getpreferredencoding(False) which is cp1252 on Windows —
+        # that crashes on non-ASCII chars in prompts (arrows, em-dashes,
+        # etc.) and on agent stdout. errors="replace" keeps a stray byte
+        # from killing the cycle; we'd rather see a `?` than die.
+        "encoding": "utf-8",
+        "errors": "replace",
         "bufsize": 1,  # line-buffered
         "close_fds": True,
     }
