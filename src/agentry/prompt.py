@@ -26,6 +26,9 @@ RUNTIME_CONTRACT = """\
 - Never leave an item in the same trigger label after a completed cycle. Move it
   forward, move it back to a retry label, or mark it blocked with a comment that
   explains the next human or agent action.
+- When moving work out of a blocked/retry state after a successful correction or
+  approval, remove stale blocking labels such as `blocked`, `changes-requested`,
+  and `tests-failed` from the relevant issue or PR.
 """
 
 

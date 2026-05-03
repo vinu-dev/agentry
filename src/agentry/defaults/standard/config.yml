@@ -367,7 +367,7 @@ agents:
       6. ALL GREEN:
            gh pr create --base main --head "feature/<id>-${slug}" \
              --title "[<id>] <title>" --body "<see template in tester.md>"
-           gh pr edit <pr> --add-label ready-for-review
+           gh pr edit <pr> --add-label ready-for-review --remove-label blocked
            gh issue edit <id> --remove-label ready-for-test
            gh issue comment <id> --body "Tests passed; PR #<pr> opened."
          ANY RED:
@@ -460,9 +460,9 @@ agents:
          - repo policy compliance
       6. APPROVE:
            gh pr review <n> --approve --body "<concise summary>"
-           gh pr edit <n> --remove-label ready-for-review
+           gh pr edit <n> --remove-label ready-for-review --remove-label blocked
          If `gh pr review` fails, use `gh pr comment <n> --body "<APPROVED:
-         ...>"` and still remove `ready-for-review`. Verify with `gh pr view`.
+         ...>"` and still remove `ready-for-review` and `blocked`. Verify with `gh pr view`.
          (Do NOT click merge — code-owner human merges.)
          BLOCK (any item failed):
            gh pr review <n> --request-changes --body "<itemized issues>"
