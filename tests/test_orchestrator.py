@@ -15,11 +15,16 @@ from __future__ import annotations
 
 import sys
 import time
+from datetime import datetime
 from pathlib import Path
 
 from agentry.config import AgentConfig, TargetConfig, target_logs_dir
 from agentry.notify import DiscordNotifier
-from agentry.orchestrator import Orchestrator
+from agentry.orchestrator import (
+    USAGE_LIMIT_BACKOFF_FALLBACK_SECONDS,
+    Orchestrator,
+    _usage_limit_backoff_seconds,
+)
 
 
 def _make_orchestrator(
@@ -127,3 +132,32 @@ class TestOrchestrator:
                 t.join(timeout=10.0)
         finally:
             orch.notifier.stop(timeout=2.0)
+
+
+def test_usage_limit_backoff_uses_reported_retry_time(tmp_path: Path):
+    log_path = tmp_path / "role.log"
+    log_path.write_text(
+        "ERROR: You've hit your usage limit. Try again at 2:43 PM.\n",
+        encoding="utf-8",
+    )
+
+    delay = _usage_limit_backoff_seconds(
+        log_path,
+        now=datetime(2026, 5, 3, 10, 46, 0),
+    )
+
+    assert delay == (3 * 60 + 57) * 60 + 5 * 60
+
+
+def test_usage_limit_backoff_uses_fallback_without_retry_time(tmp_path: Path):
+    log_path = tmp_path / "role.log"
+    log_path.write_text("ERROR: You've hit your usage limit.\n", encoding="utf-8")
+
+    assert _usage_limit_backoff_seconds(log_path) == USAGE_LIMIT_BACKOFF_FALLBACK_SECONDS
+
+
+def test_usage_limit_backoff_ignores_normal_logs(tmp_path: Path):
+    log_path = tmp_path / "role.log"
+    log_path.write_text("normal run\n", encoding="utf-8")
+
+    assert _usage_limit_backoff_seconds(log_path) is None
