@@ -55,6 +55,13 @@ function Write-Warn($msg) { Write-Host "    [WARN] $msg" -ForegroundColor Yellow
 
 $base = "https://raw.githubusercontent.com/vinu-dev/agentry/$Branch/src/agentry/defaults/standard"
 $cwd = (Get-Location).Path
+$agentryRef = $Branch
+try {
+    $remoteRef = & git ls-remote https://github.com/vinu-dev/agentry.git "refs/heads/$Branch" 2>$null
+    if ($LASTEXITCODE -eq 0 -and $remoteRef -match '^([0-9a-f]{40})\s') {
+        $agentryRef = $matches[1]
+    }
+} catch {}
 
 # -----------------------------------------------------------------------------
 
@@ -84,6 +91,10 @@ foreach ($name in $agentryFiles.Keys) {
     }
     try {
         Invoke-WebRequest -UseBasicParsing -Uri $agentryFiles[$name] -OutFile $dst
+        if ($name -in @('start.ps1', 'start.sh')) {
+            (Get-Content $dst -Raw) -replace 'a96ceaa', $agentryRef |
+                Set-Content $dst -NoNewline
+        }
         Write-OK "wrote $dst"
     } catch {
         Write-Warn "could not fetch $($agentryFiles[$name]): $_"
@@ -153,3 +164,5 @@ If this is a brand-new machine and you haven't run install-deps.ps1 yet:
      iwr -useb https://raw.githubusercontent.com/vinu-dev/agentry/main/scripts/install-deps.ps1 | iex
 
 "@ -ForegroundColor Cyan
+
+Write-Host "Agentry install ref pinned in start scripts: $agentryRef" -ForegroundColor Cyan

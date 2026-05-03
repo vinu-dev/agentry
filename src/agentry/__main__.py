@@ -1,4 +1,7 @@
-"""Allow ``python -m agentry`` invocation as a fallback when the entry-point script isn't on PATH."""
+"""Allow ``python -m agentry`` invocation.
+
+This is a fallback for when the entry-point script isn't on PATH.
+"""
 
 from agentry.cli import cli
 

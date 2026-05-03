@@ -28,6 +28,13 @@ warn() { echo -e "    ${C_YELLOW}[WARN]${C_RESET} $1"; }
 FORCE="${AGENTRY_FORCE:-0}"
 BRANCH="${AGENTRY_BRANCH:-main}"
 BASE="https://raw.githubusercontent.com/vinu-dev/agentry/$BRANCH/src/agentry/defaults/standard"
+AGENTRY_REF="$BRANCH"
+if command -v git >/dev/null 2>&1; then
+    REMOTE_REF="$(git ls-remote https://github.com/vinu-dev/agentry.git "refs/heads/$BRANCH" 2>/dev/null || true)"
+    if [[ "$REMOTE_REF" =~ ^([0-9a-f]{40})[[:space:]] ]]; then
+        AGENTRY_REF="${BASH_REMATCH[1]}"
+    fi
+fi
 
 CWD="$(pwd)"
 
@@ -57,6 +64,9 @@ for name in "${AGENTRY_FILES[@]}"; do
     fi
     if curl -fsSL "$BASE/$name" -o "$dst.tmp"; then
         mv "$dst.tmp" "$dst"
+        if [[ "$name" == "start.ps1" || "$name" == "start.sh" ]]; then
+            sed "s/a96ceaa/$AGENTRY_REF/g" "$dst" > "$dst.ref" && mv "$dst.ref" "$dst"
+        fi
         ok "wrote $dst"
     else
         warn "could not fetch $BASE/$name"
@@ -123,5 +133,7 @@ Next:
 If this is a brand-new machine and you haven't run install-deps.sh yet:
 
      curl -fsSL https://raw.githubusercontent.com/vinu-dev/agentry/main/scripts/install-deps.sh | bash
+
+Agentry install ref pinned in start scripts: $AGENTRY_REF
 
 EOF

@@ -30,12 +30,12 @@ from agentry.config import (
     load_target_config,
     load_target_env,
     role_rule_path,
-    target_agentry_dir,
     target_config_file,
     target_env_file,
     target_logs_dir,
 )
-from agentry.github import gh_available, init_labels as gh_init_labels, list_labels, repo_exists
+from agentry.github import gh_available, list_labels, repo_exists
+from agentry.github import init_labels as gh_init_labels
 from agentry.notify import DiscordNotifier
 from agentry.orchestrator import Orchestrator
 from agentry.version import __version__
@@ -76,7 +76,7 @@ def cli(ctx: click.Context, verbose: bool) -> None:
     is_flag=True,
     help="Create the standard labels in the target repo on GitHub.",
 )
-def doctor(target_path: Path, init_labels_flag: bool) -> None:  # noqa: PLR0915
+def doctor(target_path: Path, init_labels_flag: bool) -> None:
     """Validate that the target repo + secrets + CLIs are operable."""
     target_path = target_path.resolve()
     load_target_env(target_path)
@@ -95,7 +95,7 @@ def doctor(target_path: Path, init_labels_flag: bool) -> None:  # noqa: PLR0915
     using_bundled = not target_config_file(target_path).is_file()
     if using_bundled:
         click.secho(
-            f"INFO  no agentry/config.yml in target; using bundled standard 6-role config",
+            "INFO  no agentry/config.yml in target; using bundled standard 6-role config",
             fg="cyan",
         )
         click.secho(
@@ -128,6 +128,10 @@ def doctor(target_path: Path, init_labels_flag: bool) -> None:  # noqa: PLR0915
 
     # 4. Secrets file.
     env_path = target_env_file(target_path)
+    token_present = bool(os.environ.get("GITHUB_TOKEN", "").strip())
+    gh_on_path = gh_available()
+    gh_repo_ok = gh_on_path and repo_exists(target_config.target_repo)
+
     if env_path.is_file():
         click.secho(f"OK    {env_path} present", fg="green")
     else:
@@ -136,10 +140,21 @@ def doctor(target_path: Path, init_labels_flag: bool) -> None:  # noqa: PLR0915
             "and fill in GITHUB_TOKEN",
             fg="yellow",
         )
+    if token_present:
+        click.secho("OK    GitHub auth: GITHUB_TOKEN present", fg="green")
+    elif gh_repo_ok:
+        click.secho("OK    GitHub auth: gh can reach target repo", fg="green")
+    else:
+        click.secho(
+            "FAIL  GitHub auth unavailable; set GITHUB_TOKEN in agentry/.env "
+            "or authenticate gh for this repo",
+            fg="red",
+        )
+        ok = False
 
     # 5. gh CLI / target repo.
-    if gh_available():
-        if repo_exists(target_config.target_repo):
+    if gh_on_path:
+        if gh_repo_ok:
             click.secho(f"OK    gh sees {target_config.target_repo}", fg="green")
         else:
             click.secho(
@@ -160,10 +175,14 @@ def doctor(target_path: Path, init_labels_flag: bool) -> None:  # noqa: PLR0915
         existing = list_labels(target_config.target_repo)
         from agentry.github import STANDARD_LABELS
 
-        for name in STANDARD_LABELS:
+        labels_to_create = STANDARD_LABELS.copy()
+        for name in target_config.labels.values():
+            labels_to_create.setdefault(name, "ededed")
+
+        for name in labels_to_create:
             if name in existing:
                 click.secho(f"OK    label {name!r} already present", fg="green")
-        results = gh_init_labels(target_config.target_repo)
+        results = gh_init_labels(target_config.target_repo, labels_to_create)
         for name, success in results.items():
             color = "green" if success else "red"
             click.secho(f"{'OK   ' if success else 'FAIL '} create label {name!r}", fg=color)

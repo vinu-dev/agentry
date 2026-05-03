@@ -29,7 +29,6 @@ from pathlib import Path
 import yaml
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
-
 # -----------------------------------------------------------------------------
 # Pydantic models
 # -----------------------------------------------------------------------------
@@ -40,7 +39,9 @@ class AgentConfig(BaseModel):
 
     cli: str = Field(..., min_length=1, description="Binary name or absolute path")
     args: list[str] = Field(default_factory=list, description="Arguments passed before the prompt")
-    interval_min: int = Field(..., gt=0, description="Sleep N minutes between subprocess invocations")
+    interval_min: int = Field(
+        ..., gt=0, description="Sleep N minutes between subprocess invocations"
+    )
     total_min: int = Field(..., gt=0, description="Kill subprocess if it exceeds N minutes total")
     stall_min: int = Field(..., gt=0, description="Kill subprocess if no stdout for N minutes")
     prompt: str | None = Field(

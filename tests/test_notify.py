@@ -5,7 +5,6 @@ from __future__ import annotations
 import time
 
 import httpx
-import pytest
 
 from agentry.notify import DiscordNotifier, Event, _format_events
 

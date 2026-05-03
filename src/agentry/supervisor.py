@@ -33,12 +33,12 @@ import sys
 import threading
 import time
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from io import IOBase
 from pathlib import Path
 
 
-class ExitReason(str, Enum):
+class ExitReason(StrEnum):
     """Why a supervised subprocess exited."""
 
     NORMAL = "normal"  # exit code 0
@@ -125,7 +125,7 @@ def supervise(
 
         def reader() -> None:
             nonlocal last_output_at
-            assert proc is not None  # noqa: S101
+            assert proc is not None
             try:
                 for line in iter(proc.stdout.readline, ""):  # type: ignore[union-attr]
                     if not line:
@@ -249,7 +249,7 @@ def _spawn(
 
     if stdin_input is not None:
         try:
-            assert proc.stdin is not None  # noqa: S101
+            assert proc.stdin is not None
             proc.stdin.write(stdin_input)
             proc.stdin.flush()
             proc.stdin.close()
@@ -272,7 +272,7 @@ def _kill_tree(proc: subprocess.Popen[str]) -> None:
     if sys.platform == "win32":
         # taskkill walks the process tree.
         try:
-            subprocess.run(  # noqa: S603 — well-known executable
+            subprocess.run(
                 ["taskkill", "/T", "/F", "/PID", str(proc.pid)],
                 check=False,
                 capture_output=True,

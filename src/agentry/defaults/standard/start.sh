@@ -13,6 +13,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 TARGET_ROOT="$(dirname "$SCRIPT_DIR")"
 VENV="$SCRIPT_DIR/.venv"
+AGENTRY_REPO="https://github.com/vinu-dev/agentry.git"
+AGENTRY_REF="${AGENTRY_INSTALL_REF:-a96ceaa}"
 
 # Locate Python.
 PYTHON=""
@@ -34,8 +36,8 @@ if [[ ! -x "$VENV/bin/python" ]]; then
     echo "==> First-time setup: creating venv at $VENV"
     "$PYTHON" -m venv "$VENV"
     "$VENV/bin/python" -m pip install --upgrade pip
-    echo "==> Installing agentry from GitHub"
-    "$VENV/bin/python" -m pip install 'git+https://github.com/vinu-dev/agentry.git'
+    echo "==> Installing agentry from GitHub at $AGENTRY_REF"
+    "$VENV/bin/python" -m pip install "git+$AGENTRY_REPO@$AGENTRY_REF"
     echo "==> Setup complete"
 fi
 
@@ -46,4 +48,6 @@ if [[ ! -x "$VENV/bin/agentry" ]]; then
 fi
 
 echo "==> Starting agentry against $TARGET_ROOT"
+echo "==> Running doctor"
+"$VENV/bin/agentry" doctor --target "$TARGET_ROOT"
 exec "$VENV/bin/agentry" start --target "$TARGET_ROOT"

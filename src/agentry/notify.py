@@ -66,7 +66,7 @@ class DiscordNotifier:
         self._thread: threading.Thread | None = None
         self._dropped = 0  # events dropped because webhook is misconfigured
 
-    def __enter__(self) -> "DiscordNotifier":
+    def __enter__(self) -> DiscordNotifier:
         self.start()
         return self
 
@@ -89,8 +89,8 @@ class DiscordNotifier:
         if self._owns_client:
             try:
                 self._client.close()
-            except Exception:  # noqa: BLE001 — best-effort cleanup
-                pass
+            except Exception as e:
+                logger.debug("failed to close notifier HTTP client: %s", e)
         if self._dropped:
             logger.warning("notifier dropped %d events (webhook unreachable)", self._dropped)
 
@@ -98,7 +98,7 @@ class DiscordNotifier:
         """Enqueue an event. Never blocks. Never raises."""
         try:
             self._queue.put_nowait(event)
-        except Exception:  # noqa: BLE001 — emit must not break callers
+        except Exception:
             logger.exception("failed to enqueue event %r", event)
 
     # ----- internal -----

@@ -29,6 +29,9 @@ STANDARD_LABELS: dict[str, str] = {
     "tests-failed": "d93f0b",  # red
     "ready-for-review": "1d76db",  # blue
     "blocked": "b60205",  # dark red
+    "merge-conflict": "d93f0b",  # red
+    "needs-rebase": "fbca04",  # yellow
+    "needs-hardware-verification": "c5def5",  # light blue
 }
 
 
@@ -42,7 +45,7 @@ def repo_exists(target_repo: str) -> bool:
     if not gh_available():
         return False
     try:
-        r = subprocess.run(  # noqa: S603 — gh is well-known
+        r = subprocess.run(
             ["gh", "repo", "view", target_repo, "--json", "name"],
             check=False,
             capture_output=True,
@@ -59,7 +62,7 @@ def list_labels(target_repo: str) -> set[str]:
     if not gh_available():
         return set()
     try:
-        r = subprocess.run(  # noqa: S603
+        r = subprocess.run(
             [
                 "gh",
                 "label",
@@ -94,7 +97,7 @@ def create_label(target_repo: str, name: str, color: str = "ededed") -> bool:
     if not gh_available():
         return False
     try:
-        r = subprocess.run(  # noqa: S603
+        r = subprocess.run(
             [
                 "gh",
                 "label",

@@ -1,360 +1,254 @@
-# Agentry — Compatibility Specification
+# Agentry - Compatibility Specification
 
-Status: **v0.0a-final (pre-implementation)**
+Status: **v0.1 alpha**
 
-The contract a target repository must satisfy to be operated on by Agentry. Short, because the framework is small and most of the project-specific logic lives in the target repo's role rule files.
-
-Architecture: [`docs/architecture.md`](docs/architecture.md). Practical guide: [`docs/how-to-use.md`](docs/how-to-use.md). Example for regulated software: [`docs/examples/medical-device/`](docs/examples/medical-device/).
+This is the contract a target repository must satisfy to be operated by
+Agentry. The framework is intentionally small: it starts configured role CLIs,
+supervises them, writes logs, and relies on GitHub plus role rule files for the
+actual workflow.
 
 ---
 
-## 1. What a target repo provides
+## 1. Target Layout
 
-The framework ships **best-practice defaults**. A target repo only provides files that override those defaults.
+A target repo can run Agentry when it contains:
 
-### 1.1 Defaults shipped with the framework
+```text
+agentry/
+  config.yml
+  .env
+  start.ps1
+  start.sh
+docs/ai/roles/
+  <role>.md
+```
 
-| Default | Source (canonical, copy-pasteable) |
-|---------|-----------------------------------|
-| `.agentry/config.yml` (standard 6-role config) | [`docs/examples/standard/.agentry/config.yml`](docs/examples/standard/.agentry/config.yml) |
-| `docs/ai/roles/<role>.md` for each of the 6 standard roles | [`docs/examples/standard/docs/ai/roles/`](docs/examples/standard/docs/ai/roles/) |
-| GitHub labels for the 6-role lifecycle | created by `agentry doctor --init-labels` |
+`scripts/add-to-target.ps1` and `scripts/add-to-target.sh` create the standard
+layout. Targets may commit `agentry/config.yml`, start scripts, `.env.example`,
+`.gitignore`, `README.md`, and `docs/ai/roles/*.md`.
 
-A target that provides nothing runs with the standard 6 roles, sensible CLI/timeout defaults, and the bundled rule files. **Most projects need to override at most one or two things** (which CLI handles each role, project-specific test commands, sensitive-path globs).
+Targets must not commit:
 
-### 1.2 What a target overrides
+```text
+agentry/.env
+agentry/.venv/
+agentry/logs/
+agentry/state/
+```
 
-Files in the target repo take precedence over the bundled defaults, per file:
+The generated `agentry/.gitignore` covers those paths.
 
-- **`.agentry/config.yml`** in the target repo overrides the bundled config. Common reasons: pick different CLIs per role, change timeouts, add roles, declare sensitive paths.
-- **`docs/ai/roles/<role>.md`** in the target overrides the bundled rule file for that role. Common reasons: project-specific build/test commands, branch naming, sensitive-file rules, compliance references.
+---
 
-A target that provides only `.agentry/config.yml` keeps the bundled rule files. A target that provides one custom role file keeps the bundled files for the other roles.
+## 2. Config Schema
 
-### 1.3 When you need a non-standard roster
+`agentry/config.yml` is a YAML mapping:
 
-For projects that need roles beyond the standard 6 (e.g., a medical device project needing `quality_reviewer`, `cybersecurity_reviewer`, `regulatory_reviewer`, `traceability_tracker`), the target MUST provide:
+```yaml
+target_repo: owner/repo
 
-- `.agentry/config.yml` declaring all desired roles
-- `docs/ai/roles/<role>.md` for every role beyond the standard 6 (and any standard role you've replaced)
+labels:
+  logical-name: actual-github-label
 
-See [`docs/examples/medical-device/`](docs/examples/medical-device/) for an 11-role worked example.
+agents:
+  role_name:
+    cli: claude
+    args: ["-p", "--dangerously-skip-permissions"]
+    interval_min: 5
+    total_min: 30
+    stall_min: 5
+    prompt: |
+      Optional full role prompt. If omitted, Agentry uses the generic prompt.
 
-### 1.4 GitHub labels
+sensitive_paths:
+  - "**/auth/**"
+  - "**/.github/workflows/**"
+```
 
-Rule files specify which labels signal work for each role. `agentry doctor --init-labels` creates them in the target repo if missing.
+Required top-level fields:
 
-Standard 6-role labels:
+- `target_repo`: GitHub repo in `owner/repo` form.
+- `agents`: one or more roles.
+
+Optional top-level fields:
+
+- `labels`: target-specific label names to create with `doctor --init-labels`.
+- `sensitive_paths`: policy globs for role rule files to consult.
+
+Required per-role fields:
+
+- `cli`: binary name or absolute path.
+- `args`: list of CLI args passed before stdin prompt.
+- `interval_min`: minutes between role invocations.
+- `total_min`: max subprocess runtime.
+- `stall_min`: max silence on stdout before the subprocess is killed.
+
+Optional per-role fields:
+
+- `prompt`: full prompt sent to the CLI over stdin. If absent, Agentry builds a
+  generic prompt that points the role at `docs/ai/roles/<role>.md`.
+
+Role names must be non-empty and must not contain spaces or `/`.
+
+---
+
+## 3. Role Rule Files
+
+Each declared role should have:
+
+```text
+docs/ai/roles/<role>.md
+```
+
+For the standard six roles, Agentry falls back to bundled role files if the
+target does not provide one. Custom roles beyond the bundled standard roster
+must provide their own rule file.
+
+A good role file describes:
+
+- trigger: which labels, schedule, or repo state produce work
+- steps: what the agent should do per item
+- output: which label, PR, branch, or artifact advances the lifecycle
+- constraints: project conventions and sensitive areas
+- failure modes: what to label or comment when the role cannot proceed
+
+The framework does not interpret role files. The spawned CLI reads and follows
+them.
+
+---
+
+## 4. GitHub Auth
+
+At least one GitHub auth path must work:
+
+- `GITHUB_TOKEN` is set in `agentry/.env`, or
+- `gh` is authenticated and can reach `target_repo`.
+
+For unattended operation, `GITHUB_TOKEN` is recommended. Use a fine-grained PAT
+restricted to the target repo with:
+
+- contents: read/write
+- issues: read/write
+- pull requests: read/write
+- metadata: read
+
+`agentry doctor --target .` fails if neither auth path is available.
+
+---
+
+## 5. Labels
+
+`agentry doctor --target . --init-labels` creates:
+
+- bundled standard lifecycle labels
+- bundled standard failure labels
+- any label names listed in `agentry/config.yml` under `labels`
+
+The standard labels are:
+
 - `ready-for-design`
 - `ready-for-implementation`
 - `ready-for-test`
 - `tests-failed`
 - `ready-for-review`
 - `blocked`
+- `merge-conflict`
+- `needs-rebase`
+- `needs-hardware-verification`
 
-Extended rosters (medical device, etc.) introduce more labels (`ready-for-quality-review`, `ready-for-cyber-review`, etc.). The set is whatever the active rule files reference.
+Non-standard role files may use more labels. Add those names to the config
+`labels` mapping so doctor can create them for fresh repos.
 
 ---
 
-## 2. The roles are extensible
+## 6. Start Scripts and Versioning
 
-Agentry doesn't bake in a fixed roster. **A target repo declares whatever roles it needs in `.agentry/config.yml`.** The framework spawns one forever-loop per declared role.
+Each target runs Agentry through:
 
-### Common starter roster (most projects)
-
-```yaml
-agents:
-  researcher:    { cli: claude, ... }
-  architect:     { cli: claude, ... }
-  implementer:   { cli: codex, ... }
-  tester:        { cli: claude, ... }
-  reviewer:      { cli: claude, ... }
-  release:       { cli: claude, ... }
+```text
+agentry/start.ps1
+agentry/start.sh
 ```
 
-6 roles. Suitable for hobby projects, small teams, internal tools.
+On first run, the script creates `agentry/.venv/` and installs Agentry from the
+GitHub ref embedded in the script. The add-to-target scripts stamp this ref
+from the selected Agentry branch when possible, so a target repo does not
+silently float to whatever is currently on `main`.
 
-### Extended roster — example: medical device development
+Operators may override the install ref intentionally:
 
-```yaml
-agents:
-  researcher:              { cli: claude, ... }
-  risk_analyst:            { cli: claude, ... }      # ISO 14971 risk analysis
-  architect:               { cli: claude, ... }
-  implementer:             { cli: codex, ... }
-  tester:                  { cli: claude, ... }
-  code_reviewer:           { cli: claude, ... }      # functional code review
-  quality_reviewer:        { cli: claude, ... }      # ISO 13485 / IEC 62304
-  cybersecurity_reviewer:  { cli: claude, ... }      # IEC 81001-5-1 / FDA cyber
-  regulatory_reviewer:     { cli: claude, ... }      # FDA 510(k) / 21 CFR 820
-  traceability_tracker:    { cli: claude, ... }      # bidirectional req → test
-  release:                 { cli: claude, ... }
+```bash
+AGENTRY_INSTALL_REF=<branch-tag-or-commit> ./agentry/start.sh
 ```
 
-11 roles. See [`docs/examples/medical-device/`](docs/examples/medical-device/) for a complete config plus all rule files.
-
-### Other rosters you might design
-
-- **Open-source library**: researcher + architect + implementer + tester + reviewer + docs_writer + release
-- **Embedded firmware**: researcher + architect + implementer + tester (with hardware steps in the rule file) + reviewer + release
-- **Web service**: researcher + architect + implementer + tester + reviewer + security_reviewer + performance_tester + release
-
-The framework treats any roster identically. Operator picks what fits the project.
+After changing the install ref, delete `agentry/.venv/` and rerun the start
+script to recreate the environment.
 
 ---
 
-## 3. The lifecycle is repo-specific
+## 7. Runtime Logs and State
 
-There's no single canonical lifecycle. The label progression is whatever the rule files describe.
+Agentry writes subprocess logs to:
 
-### Standard 6-role lifecycle
-
-```
-Researcher → opens issue labeled `ready-for-design`
-ready-for-design       → Architect → ready-for-implementation
-ready-for-implementation → Implementer → ready-for-test
-ready-for-test         → Tester → ready-for-review (PR) | tests-failed
-ready-for-review (PR)  → Reviewer → approve | blocked
-approved               → GitHub auto-merge
-merged
+```text
+agentry/logs/<role>/<timestamp>.log
 ```
 
-Fully autonomous — no human triage. The Operator only intervenes for `blocked`
-PRs.
+Role prompts may write continuity state under:
 
-### Extended medical-device lifecycle (11 roles)
-
-```
-Researcher → opens issue labeled `needs-risk`
-needs-risk                  → Risk Analyst → ready-for-design
-ready-for-design            → Architect → ready-for-implementation
-ready-for-implementation    → Implementer → ready-for-test
-ready-for-test              → Tester → ready-for-code-review | tests-failed
-ready-for-code-review       → Code Reviewer → ready-for-quality-review
-ready-for-quality-review    → Quality Reviewer → ready-for-cyber-review
-ready-for-cyber-review      → Cybersecurity Reviewer → ready-for-regulatory-review
-ready-for-regulatory-review → Regulatory Reviewer → ready-for-traceability
-ready-for-traceability      → Traceability Tracker → ready-for-merge
-ready-for-merge             → GitHub auto-merge
-merged
-        ↓ Release Engineer (daily) → tag + build + GitHub Release
+```text
+agentry/state/
 ```
 
-Each transition is encoded in the corresponding role's `docs/ai/roles/<role>.md` file. The framework doesn't know what comes next; the rule files chain via labels.
+GitHub remains the source of truth for issues, PRs, labels, branches, and
+review state. Local state should only help a role continue its own work.
 
 ---
 
-## 4. `.agentry/config.yml` — schema
+## 8. Extensibility
 
-```yaml
-# Required: which target repo this config governs
-target_repo: vinu-dev/rpi-home-monitor
+Agentry does not bake in a fixed roster. Any repo may declare any number of
+roles in `agentry/config.yml`.
 
-# Optional: rename labels in this target if there's a naming conflict
-labels:
-  ready-for-design: ready-for-design          # default — usually omit this block
-  # ... only override entries you need to rename
+Common software repos may use:
 
-# Required: agent roster — declare any number of roles
-agents:
-  <role-name>:
-    cli: <binary-name-or-path>                # e.g. "claude", "codex", "ollama-shim"
-    args: [<list of CLI args>]                # e.g. ["-p", "--dangerously-skip-permissions"]
-    interval_min: <int>                       # sleep N min between subprocess invocations
-    total_min: <int>                          # kill if running longer than N min
-    stall_min: <int>                          # kill if silent (no stdout) for N min
-  <other-role-name>:
-    ...
-
-# Optional: paths the Reviewer's rule file should treat as block-worthy
-sensitive_paths:
-  - "**/auth/**"
-  - "**/ota/**"
-  - "**/pairing*"
+```text
+researcher -> architect -> implementer -> tester -> reviewer -> release
 ```
 
-### Field reference
+Regulated or security-heavy repos can add roles such as:
 
-Per role:
-
-| Field | Required | Meaning |
-|-------|----------|---------|
-| `cli` | yes | Binary name or absolute path. Looked up on PATH if name only. |
-| `args` | yes | List passed to the CLI before the framework's prompt |
-| `interval_min` | yes | Sleep this many minutes between subprocess invocations |
-| `total_min` | yes | Kill if subprocess runs longer than this |
-| `stall_min` | yes | Kill if subprocess silent (no stdout) for this long |
-
-**No `prompt` field** — the framework generates the prompt from a built-in template, substituting the role name and the list of other roles in the config.
-
-### Recommended defaults
-
-| Role | interval_min | total_min | stall_min | Notes |
-|------|------------:|----------:|----------:|-------|
-| researcher | 60 | 30 | 5 | hourly cron |
-| risk_analyst | 5 | 30 | 5 | (medical) |
-| architect | 5 | 30 | 5 | |
-| implementer | 5 | 60 | 10 | |
-| tester | 5 | 60 | 15 | longer if hardware steps |
-| code_reviewer | 5 | 20 | 5 | |
-| quality_reviewer | 5 | 30 | 5 | (medical, larger context) |
-| cybersecurity_reviewer | 5 | 30 | 5 | (medical) |
-| regulatory_reviewer | 5 | 30 | 5 | (medical) |
-| traceability_tracker | 10 | 30 | 5 | (medical) |
-| reviewer | 5 | 20 | 5 | (hobby) |
-| release | 1440 | 60 | 15 | daily |
-
-Operator tunes per project.
-
----
-
-## 5. Per-host `pipeline.local.toml`
-
-```toml
-[host]
-state_dir = "~/.agentry/state"
-
-[github]
-token_env = "GITHUB_TOKEN"
-
-[notification]
-discord_webhook_env = "DISCORD_WEBHOOK_URL"
-
-[orchestrator]
-batch_notify_seconds = 60
+```text
+risk_analyst
+quality_reviewer
+cybersecurity_reviewer
+regulatory_reviewer
+traceability_tracker
+security_reviewer
+docs_writer
+performance_tester
 ```
 
----
-
-## 6. Role rule file format
-
-Each `docs/ai/roles/<role>.md` is a markdown document the repo owner writes. Required structure:
-
-```markdown
-# <Role Name>
-
-## Trigger
-What labels (or schedules) make this role have work to do. Always end with
-"if no work, exit immediately."
-
-## Steps
-Numbered list of what to do per work item. Should always end with a label
-transition (or PR creation, or issue closure) so the lifecycle advances.
-
-## Constraints (optional)
-Any project-specific rules: file conventions, security boundaries, paths
-requiring human review, regulatory compliance references.
-
-## Failure modes
-What to do if work can't be completed (e.g., "label `blocked` and exit").
-
-## References (optional)
-Links to standards (ISO 13485 §8.4, IEC 62304 §5.5, FDA 21 CFR 820.30, etc.),
-internal docs, prior decisions.
-```
-
-The framework prompt instructs the agent to **read this file and follow it exactly**. Everything project-specific lives here.
+The framework behavior is the same for every roster: one supervised loop per
+declared role.
 
 ---
 
-## 7. The framework's generic prompt
+## 9. Doctor Expectations
 
-The framework synthesizes this prompt at agent spawn time. The Operator does **not** write it; it's identical across every role and every repo:
+`agentry doctor --target .` checks:
 
-```
-You are the {role_name} in an autonomous software development pipeline.
+1. target config loads and validates
+2. role rule files exist, target-specific or bundled
+3. configured CLIs are discoverable on `PATH`
+4. `agentry/.env` exists
+5. GitHub auth is available through `GITHUB_TOKEN` or `gh`
+6. `gh` can reach the configured target repo, when available
 
-How this pipeline works:
-  - Multiple roles run in parallel — concurrently with you, the following
-    roles are also active: {other_roles}.
-  - Each role finds work in its own input state, processes one or more items,
-    and moves them to an output state. Roles do not coordinate directly;
-    they work concurrently.
-  - On each invocation you process as many items as you can within your time
-    budget, then exit.
+Exit code:
 
-Your job specifics — including which labels signal work for you, what to
-produce, and which label to apply when done — are defined in:
+- `0`: pass
+- `2`: fail
 
-    docs/ai/roles/{role_name}.md
-
-Read that file and follow it exactly.
-
-General loop:
-  1. Find work items in your input state.
-  2. If none, exit immediately with code 0.
-  3. Otherwise take the oldest item.
-  4. Do the work as described in docs/ai/roles/{role_name}.md.
-  5. Move the item to your output state.
-  6. Repeat from step 1.
-
-If docs/ai/roles/{role_name}.md doesn't exist, exit with code 1.
-```
-
-`{role_name}` and `{other_roles}` are substituted from `.agentry/config.yml`. Nothing else changes.
-
----
-
-## 8. `agentry doctor` validation
-
-`agentry doctor --target <path>` checks:
-
-1. `.agentry/config.yml` exists, parses, contains at least one agent
-2. Every declared agent has all required fields (cli, args, interval_min, total_min, stall_min)
-3. Every declared agent has a corresponding `docs/ai/roles/<role>.md` file present and non-empty
-4. Every CLI binary in the config exists on PATH (or absolute path is valid)
-5. The labels referenced in role files exist in the target repo on GitHub (or `--init-labels` creates them)
-
-Exit codes: `0` = pass, `1` = warnings, `2` = fail.
-
-The orchestrator runs `agentry doctor` once at startup and refuses to spawn any role whose prerequisites fail.
-
----
-
-## 9. Sensitive paths and auto-merge
-
-The orchestrator does **not** auto-merge — the Reviewer (or whichever role the project designates as "final approver") does, by approving the PR. GitHub's branch-protection auto-merge handles the actual click.
-
-If a PR's diff touches any glob in `sensitive_paths`, the Reviewer's rule file should instruct it to add the `blocked` label instead of approving. This means:
-
-- The auto-merge guard is enforced **by the role rule file**, not by the framework
-- The framework's responsibility is just: dispatch the agent, give it the diff
-- The repo owner's `docs/ai/roles/reviewer.md` (or `docs/ai/roles/regulatory_reviewer.md`, etc.) says: "if `git diff --name-only` matches any pattern in `.agentry/config.yml`'s `sensitive_paths`, label `blocked` and exit"
-
-This keeps the framework dumb and the policy in the repo where it belongs.
-
----
-
-## 10. Hardware integration — per repo, no special framework support
-
-Hardware access is the repo's concern, defined in role rule files (typically `tester.md`). The framework provides no special hardware tooling — it just spawns LLM CLI subprocesses which already have access to ssh, scp, curl, socat, and shell commands.
-
-If a repo's `tester.md` includes hardware steps (SSH to a Pi, flash via SWUpdate, scrape serial console, etc.), the agent (Claude Code, Codex CLI) will execute them using its built-in tools. Set `total_min` generous enough to allow flash + boot + smoke (often 30-60 minutes).
-
-The Operator is responsible for host setup: SSH credentials, network reachability, required CLIs (`socat`, `swupdate-cli`, `lsusb`, etc.) installed on the host.
-
----
-
-## 11. Spec versioning
-
-Informal. When a breaking change happens:
-
-- Bump the version comment at the top of this file
-- Update `agentry doctor` to handle both old and new
-- Provide a migration note
-
-There's no JSON Schema file, no PEP 440 ranges, no version handshake. The framework either works against your repo or it doesn't, and `agentry doctor` tells you which.
-
----
-
-## 12. Glossary
-
-- **Operator** — the human running Agentry. Does not do triage (the pipeline is fully autonomous); only intervenes for `blocked` PRs and decides when to stop the orchestrator.
-- **Target** — any repo with `agentry/config.yml` + `docs/ai/roles/*.md` + the labels referenced by those rule files.
-- **Role rule file** — `docs/ai/roles/<role>.md`. Repo-specific instructions for one agent role.
-- **Forever-loop** — the orchestrator's per-role thread that wakes the agent, waits, sleeps, repeats.
-- **Generic prompt** — the framework-synthesized prompt that wraps every role invocation, encoding the parallel-pipeline pattern. Same across all roles and projects.
-
----
-
-*End of COMPATIBILITY-SPEC.md.*
+Warnings are printed for optional or recoverable gaps, such as a missing CLI
+that only affects one role.

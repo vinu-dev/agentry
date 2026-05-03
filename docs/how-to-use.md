@@ -1,529 +1,235 @@
-# Agentry — How to Use
+# Agentry - How to Use
 
-Status: **draft, pre-implementation**
+Status: **v0.1 alpha**
 
-The Operator's quick guide. Five-step flow to get a target repo running autonomously.
-
----
-
-## TL;DR — the five steps
-
-```bash
-# 1. Install Agentry once on this host
-uv tool install --from git+ssh://git@github.com/vinu-dev/agentry.git agentry
-agentry service install                   # registers systemd / NSSM service
-
-# 2. Get the target repo
-git clone git@github.com:vinu-dev/rpi-home-monitor.git
-cd rpi-home-monitor
-
-# 3. Add Agentry to it (gtest-style: declare it, don't copy it)
-agentry init                              # creates .agentry/config.yml + docs/ai/roles/*.md skeletons
-
-# 4. Edit which model handles each role + write what each role does
-$EDITOR .agentry/config.yml               # set `cli` per role (claude, codex, etc.)
-$EDITOR docs/ai/roles/architect.md       # write project-specific instructions per role
-# ... same for the other roles
-
-# 5. Start the show
-git commit -am "Add Agentry config and role rules"
-git push
-agentry target add --repo git@github.com:vinu-dev/rpi-home-monitor.git
-agentry status                            # all role threads running
-```
-
-`agentry start` auto-detects which CLIs are installed (looks them up on PATH) and runs them with the args you configured. Discord pings as work flows through.
+Agentry is installed per target repository. You drop an `agentry/` folder into
+the repo, configure roles, add secrets locally, and run the foreground start
+script when you want the agent pipeline active. There is no host daemon,
+`agentry service install`, `agentry init`, or `agentry target add` command in
+v0.1.
 
 ---
 
-## 1. Prerequisites
+## TL;DR
 
-- A host that runs 24/7: Ubuntu 22.04+ (recommended) or Windows 11
-- Python 3.11+
-- `uv` (`curl -LsSf https://astral.sh/uv/install.sh | sh`)
-- `gh` CLI (for `agentry init` and label management)
-- At least one LLM CLI installed: `claude` (Claude Code) and/or `codex` (Codex CLI), and/or a wrapper script for a local model
-- A Discord server where you can post webhooks
+### 1. Install machine dependencies once
 
-Optional, role-dependent:
-
-- Local model runtime (ollama / lm-studio) if you want a role to use a local model
-- WSL2 with Ubuntu (Windows hosts only) if any role's rule file calls Linux-only tools (e.g., `bitbake`)
-- SSH credentials to a hardware test rig if any role's rule file accesses hardware
-
----
-
-## 2. Step 1 — Install Agentry on the host
-
-### Linux
-
-```bash
-uv tool install --from git+ssh://git@github.com/vinu-dev/agentry.git agentry
-agentry --version
-mkdir -p ~/.agentry/state
-```
-
-### Windows
+Windows:
 
 ```powershell
-uv tool install --from git+ssh://git@github.com/vinu-dev/agentry.git agentry
-agentry --version
-New-Item -ItemType Directory -Path "$env:USERPROFILE\.agentry\state" -Force
+iwr -useb https://raw.githubusercontent.com/vinu-dev/agentry/main/scripts/install-deps.ps1 | iex
 ```
 
-### Set up secrets and host config
+Linux:
 
-`~/.agentry/.env`:
-
-```
-ANTHROPIC_API_KEY=sk-ant-...                      # if using Anthropic API
-OPENAI_API_KEY=sk-...                              # if using OpenAI API
-GITHUB_TOKEN=ghp_...                               # fine-grained PAT
-DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
+```bash
+curl -fsSL https://raw.githubusercontent.com/vinu-dev/agentry/main/scripts/install-deps.sh | bash
 ```
 
-GitHub PAT scopes: `contents` (read+write), `issues` (read+write), `pull_requests` (read+write), `metadata` (read).
-
-`~/.agentry/pipeline.local.toml`:
-
-```toml
-[host]
-state_dir = "~/.agentry/state"
-
-[github]
-token_env = "GITHUB_TOKEN"
-
-[notification]
-discord_webhook_env = "DISCORD_WEBHOOK_URL"
-```
-
-### Authenticate subscription CLIs (optional)
-
-If you want roles routed through your Claude Pro/Max subscription:
+Then authenticate the LLM CLIs you plan to use:
 
 ```bash
 claude login
-```
-
-Or your ChatGPT/Codex subscription:
-
-```bash
 codex login
 ```
 
-These store OAuth credentials locally that the spawned subprocesses inherit.
+### 2. Add Agentry to one target repo
 
-### Install services
+Run this from inside the target repository:
 
-```bash
-agentry service install
-```
-
-On Linux: writes systemd unit at `~/.config/systemd/user/agentry.service` and enables it.
-On Windows: creates an NSSM service running as your user (so OAuth creds for `claude login` / `codex login` are reachable).
-
-```bash
-agentry status
-
-# orchestrator: running (pid 12345, 0 targets, 0 role threads)
-# notifications: ok
-```
-
----
-
-## 3. Step 2-3 — Point Agentry at a target repo
-
-### Clone the target
-
-```bash
-git clone git@github.com:vinu-dev/rpi-home-monitor.git
-cd rpi-home-monitor
-```
-
-### Decide: defaults or custom?
-
-Agentry ships with **best-practice defaults** — a standard 6-role config and rule files. **You can run against your target without creating any Agentry files at all.** The framework uses the bundled defaults.
-
-```bash
-agentry target add --repo git@github.com:vinu-dev/rpi-home-monitor.git
-# Agentry runs with defaults: claude/codex CLIs, sensible timeouts, standard 6 roles.
-# Researcher opens issues labeled `ready-for-design`. Pipeline runs end-to-end with no human input.
-```
-
-That works for most hobby projects.
-
-### When you DO want to customize
-
-Run `agentry init` to copy the defaults INTO your target repo as editable files:
-
-```bash
-agentry init                              # default: 6-role roster
-# or
-agentry init --template medical-device    # 11-role medical device roster
-```
-
-This creates the file tree in the current repo:
-
-```
-.agentry/
-└── config.yml                            ← edit this to pick CLIs / timeouts
-docs/
-└── ai/
-    └── roles/
-        ├── researcher.md                 ← edit these to add project-specific rules
-        ├── architect.md
-        ├── implementer.md
-        ├── tester.md
-        ├── reviewer.md
-        └── release.md
-```
-
-For `--template medical-device`, you also get `risk_analyst.md`, `code_reviewer.md`, `quality_reviewer.md`, `cybersecurity_reviewer.md`, `regulatory_reviewer.md`, `traceability_tracker.md`.
-
-The files written by `agentry init` are exact copies of [`docs/examples/standard/`](https://github.com/vinu-dev/agentry/tree/main/docs/examples/standard) (or [`medical-device`](https://github.com/vinu-dev/agentry/tree/main/docs/examples/medical-device)) from the framework repo. Agentry uses your customized version once they're committed; if a file is missing in your target, Agentry falls back to the bundled default.
-
-**Practical result:** to run with defaults, do nothing. To customize ONE thing (e.g., switch implementer to Codex), commit just `.agentry/config.yml` with that one role's `cli` field changed; everything else still uses defaults.
-
----
-
-## 4. Step 4 — Configure models and write rule files
-
-### Pick which model handles each role
-
-Edit `.agentry/config.yml`. Default uses `claude` everywhere. Adjust per your setup:
-
-```yaml
-target_repo: vinu-dev/rpi-home-monitor
-
-agents:
-  researcher:
-    cli: claude                              # uses claude CLI
-    args: ["-p", "--dangerously-skip-permissions"]
-    interval_min: 60
-    total_min: 30
-    stall_min: 5
-
-  architect:
-    cli: claude                              # Opus is great for architecture
-    args: ["-p", "--dangerously-skip-permissions"]
-    interval_min: 5
-    total_min: 30
-    stall_min: 5
-
-  implementer:
-    cli: codex                               # Codex via OpenAI subscription
-    args: ["--auto-approve"]
-    interval_min: 5
-    total_min: 60
-    stall_min: 10
-
-  tester:
-    cli: claude
-    args: ["-p", "--dangerously-skip-permissions"]
-    interval_min: 5
-    total_min: 30
-    stall_min: 10
-
-  reviewer:
-    cli: claude                              # different vendor than implementer recommended
-    args: ["-p", "--dangerously-skip-permissions"]
-    interval_min: 5
-    total_min: 20
-    stall_min: 5
-
-  release:
-    cli: claude
-    args: ["-p", "--dangerously-skip-permissions"]
-    interval_min: 1440      # daily
-    total_min: 60
-    stall_min: 15
-
-sensitive_paths:
-  - "**/auth/**"
-  - "**/ota/**"
-  - "**/pairing*"
-```
-
-### Mix and match across roles
-
-```yaml
-agents:
-  researcher:    { cli: claude, ... }            # Claude API or subscription
-  architect:     { cli: claude, ... }
-  implementer:   { cli: codex, ... }             # OpenAI Codex subscription
-  tester:        { cli: ollama-llama,  ... }     # local Llama via wrapper
-  reviewer:      { cli: claude, ... }
-  release:       { cli: claude, ... }
-```
-
-The framework doesn't care what binary is — only that it accepts args and a prompt, runs, and exits. A wrapper script around ollama works the same as `claude`:
-
-```bash
-#!/usr/bin/env bash
-# /usr/local/bin/ollama-llama
-exec ollama run llama-3.1-70b "$@"
-```
-
-### Write each role's rule file
-
-This is where the project-specific work lives. Example for `docs/ai/roles/architect.md`:
-
-```markdown
-# Architect
-
-## Trigger
-Find issues labeled `ready-for-design` (oldest first). If none, exit immediately.
-
-## Steps
-1. Read the issue body and any linked context
-2. Read docs/architecture/ to understand the existing system
-3. Read docs/ai/risk-register.md for sensitive areas to flag
-4. Write a design doc to docs/ai/designs/<id>-<slug>.md including:
-   - Goal (1-2 sentences)
-   - Acceptance criteria
-   - Architecture impact
-   - Risks (cross-reference risk register)
-   - Test plan
-5. Commit on a fresh branch `agentry/<id>/design-<slug>`
-6. Push the branch
-7. Open a PR titled `[design] <issue title>` linking the issue
-8. On the issue: replace label `ready-for-design` with `ready-for-implementation`
-9. Exit
-```
-
-Same shape for the other roles. Customize per project conventions.
-
-For a medical device project, role files are denser and reference specific standards:
-
-```markdown
-# Quality Reviewer
-
-## Trigger
-Find PRs labeled `ready-for-quality-review`. If none, exit.
-
-## Steps per PR
-1. Check ISO 13485 §8.4 conformance:
-   - Design output traces to design input (verify via traceability matrix)
-   - Software unit verification records present (per IEC 62304 §5.5.5)
-2. Check IEC 62304 software safety classification:
-   - Class A/B/C correctly tagged in issue
-   - Documentation matches class requirements
-3. ...
-```
-
-See [`docs/examples/medical-device/`](examples/medical-device/) for full examples.
-
----
-
-## 5. Step 5 — Start
-
-```bash
-git commit -am "Add Agentry config and role rules"
-git push
-
-agentry doctor --target git@github.com:vinu-dev/rpi-home-monitor.git --init-labels
-# Creates the labels referenced by your rule files
-# Validates: config valid, all role files present, all CLIs on PATH
-
-agentry target add --repo git@github.com:vinu-dev/rpi-home-monitor.git
-# Orchestrator now spawns one thread per declared role
-
-agentry status
-
-# orchestrator: running (pid 12345, 1 target, 6 role threads)
-#   role threads:
-#     researcher    next-spawn-in: 42m   last-exit: 0
-#     architect     next-spawn-in: 3m    last-exit: 0 (no work)
-#     implementer   next-spawn-in: 4m    last-exit: 0 (no work)
-#     tester        next-spawn-in: 2m    last-exit: 0 (no work)
-#     reviewer      next-spawn-in: 1m    last-exit: 0 (no work)
-#     release       next-spawn-in: 23h   last-exit: 0
-```
-
-You're done with setup. The system runs.
-
----
-
-## 6. Daily operation
-
-### What you'll see
-
-Discord pings as roles wake up:
-
-```
-[Agentry] researcher: started
-[Agentry] researcher: opened issue #173 "Add audio recording"
-[Agentry] researcher: exited 0 (took 4m12s)
-[Agentry] architect: started, no work, exited 0
-[Agentry] architect: started for #173
-[Agentry] architect: design doc committed for #173, label flipped
-[Agentry] implementer: started for #173
-[Agentry] tester: tests-failed for #173, label flipped
-[Agentry] implementer: started for #173 (retry 1)
-[Agentry] tester: green, PR #88 opened, label `ready-for-review`
-[Agentry] reviewer: approved PR #88
-[GitHub] PR #88 merged
-```
-
-### Operator commands
-
-```bash
-agentry status                       # what's running, what's stuck
-agentry logs                         # tail orchestrator log
-agentry logs --role implementer      # tail one role's stdout
-
-agentry pause --role implementer     # stop spawning this role until resume
-agentry resume --role implementer
-
-agentry pause                        # stop all roles
-agentry resume
-
-agentry kick --role <role>           # force-kill current subprocess; next interval starts fresh
-```
-
-### Triaging research drafts
-
-The Researcher opens issues with no label. You decide which to act on:
-
-- **Worth doing now:** add the label your project uses for "next stage" (e.g., `ready-for-design` or `ready-for-risk-analysis` for medical projects). The next role picks up within 5 min.
-- **Maybe later:** add a custom label like `backlog`. Agentry ignores it.
-- **Not worth it:** close the issue.
-
-This is the only manual step in routine operation.
-
-### Vetoing or unsticking
-
-- A PR has `blocked` — Reviewer (or another reviewer role for medical) flagged it. Decide manually.
-- A role keeps stalling — check `agentry logs --role <name>`. Likely the rule file is unclear or the CLI is hitting an environment issue.
-- An agent is misbehaving — `agentry pause --role <name>`, fix the rule file, `agentry resume`.
-
----
-
-## 7. Adding more roles for specialized projects
-
-For projects with extra compliance, security, or quality concerns, declare additional roles in `.agentry/config.yml` and write their rule files in `docs/ai/roles/`. The framework spawns one thread per declared role automatically.
-
-### Medical device example (11 roles)
-
-See [`docs/examples/medical-device/`](examples/medical-device/) for a complete example with:
-
-- `risk_analyst` — ISO 14971 risk analysis on every new feature
-- `quality_reviewer` — ISO 13485 / IEC 62304 conformance
-- `cybersecurity_reviewer` — IEC 81001-5-1 + FDA cyber guidance
-- `regulatory_reviewer` — FDA 510(k) / 21 CFR 820 impact
-- `traceability_tracker` — bidirectional req → design → code → tests verification
-
-The framework runs identically — just more threads.
-
-### Other specialized rosters
-
-- **Open-source library**: + `docs_writer` role for API docs, + `changelog_curator` role
-- **Web service**: + `security_reviewer` for OWASP-style review, + `performance_tester` for load tests
-- **Embedded firmware**: tester rule file includes hardware flash + smoke + serial scrape
-
----
-
-## 8. Subscription routing
-
-Both `claude` and `codex` CLIs use OAuth from their respective `login` commands. Setting these up once on the host means subprocesses run against your subscription quota instead of API tokens.
-
-```bash
-claude login              # opens a browser, do this once
-codex login               # same
-```
-
-When the subscription rate-limits, the CLI exits with an error. The role pauses until the next interval, when subscription is back. If you want a fallback (e.g., switch to API on rate limit), wrap the CLI in a small shell script:
-
-```bash
-#!/usr/bin/env bash
-# claude-with-api-fallback
-claude "$@" 2>&1 | tee /tmp/claude.log
-if grep -q "rate.limit" /tmp/claude.log; then
-    claude --api-key "$ANTHROPIC_API_KEY" "$@"
-fi
-```
-
-Point the role's `cli:` field at this script. The framework doesn't need to know.
-
----
-
-## 9. Hardware integration
-
-If a role's rule file calls hardware (SSH to a Pi, flash via SWUpdate, scrape serial), the agent does it using its built-in shell tools. The framework doesn't need to know.
-
-Operator setup:
-
-- SSH credentials reachable to the orchestrator user (`~/.ssh/id_rsa` permissions correct)
-- Test rig on a network the host can reach
-- Required CLIs installed (`socat`, `swupdate-cli`, `lsusb`, etc.)
-- Generous `total_min` for the role doing the hardware work (often 30-60 min for flash + boot + smoke)
-
-Example `docs/ai/roles/tester.md` snippet:
-
-```markdown
-## Hardware verification (if PR touches embedded code)
-
-If the diff touches `app/camera/` or `meta-home-monitor/`, run hardware smoke:
-
-1. Build SWU: `./scripts/build.sh camera-dev`
-2. SCP to test rig: `scp build/output.swu pi@192.168.1.51:/tmp/`
-3. SSH and flash: `ssh pi@192.168.1.51 'sudo swupdate -i /tmp/output.swu'`
-4. Wait for boot: `socat /dev/ttyUSB0,b115200 -` (capture for 60s)
-5. SSH and check: `ssh pi@192.168.1.51 'systemctl status camera-streamer.service'`
-6. If green, label `ready-for-review`. If red, label `tests-failed`.
-```
-
----
-
-## 10. Troubleshooting
-
-### Orchestrator won't start
-
-```bash
-journalctl --user -u agentry -e             # Linux
-# Windows: Event Viewer → Application logs
-```
-
-Common: `.env` missing, `agentry doctor` failing for a target, port conflict on IPC socket.
-
-### A role's CLI not found
-
-```
-Error: agent 'implementer' uses cli 'codex' which is not on PATH
-Install: npm install -g @openai/codex
-```
-
-`agentry doctor` checks every CLI before spawning. Install missing CLIs and re-run.
-
-### Role exits non-zero immediately
-
-Usually the rule file is missing:
-
-```
-researcher: docs/ai/roles/researcher.md not found, exit 1
-```
-
-Create or edit the rule file in the target repo.
-
-### Service running as wrong user (Windows)
-
-If `claude` CLI reports "not authenticated" despite `claude login` working interactively:
+Windows:
 
 ```powershell
-nssm set agentry ObjectName .\<your-username> <your-password>
-sc stop agentry && sc start agentry
+iwr -useb https://raw.githubusercontent.com/vinu-dev/agentry/main/scripts/add-to-target.ps1 | iex
 ```
 
-`agentry service install` does this automatically; only relevant for debugging.
-
-### Discord notifications not arriving
+Linux:
 
 ```bash
-agentry notify test
+curl -fsSL https://raw.githubusercontent.com/vinu-dev/agentry/main/scripts/add-to-target.sh | bash
 ```
 
-If that fails, check `DISCORD_WEBHOOK_URL` in `.env`. Webhook URLs expire if the channel is deleted.
+This writes:
+
+```text
+agentry/
+  config.yml
+  start.ps1
+  start.sh
+  .env.example
+  .gitignore
+  README.md
+docs/ai/roles/
+  researcher.md
+  architect.md
+  implementer.md
+  tester.md
+  reviewer.md
+  release.md
+```
+
+Existing files are preserved unless you pass `-Force` on Windows or set
+`AGENTRY_FORCE=1` on Linux.
+
+### 3. Configure secrets and roles
+
+Copy the local secrets template:
+
+Windows:
+
+```powershell
+Copy-Item agentry\.env.example agentry\.env
+notepad agentry\.env
+```
+
+Linux:
+
+```bash
+cp agentry/.env.example agentry/.env
+$EDITOR agentry/.env
+```
+
+Set `GITHUB_TOKEN` at minimum. `DISCORD_WEBHOOK_URL`, `ANTHROPIC_API_KEY`, and
+`OPENAI_API_KEY` are optional.
+
+Edit `agentry/config.yml` to choose the CLI, args, and timeouts for each role.
+Edit `docs/ai/roles/*.md` for project-specific rules.
+
+### 4. Validate
+
+The repo-local `agentry` CLI is created on first start under `agentry/.venv/`.
+The start scripts run doctor automatically before spawning agents. After the
+first setup, you can also run doctor directly:
+
+Windows:
+
+```powershell
+.\agentry\.venv\Scripts\agentry.exe doctor --target .
+```
+
+Linux:
+
+```bash
+./agentry/.venv/bin/agentry doctor --target .
+```
+
+To create the standard GitHub labels:
+
+Windows:
+
+```powershell
+.\agentry\.venv\Scripts\agentry.exe doctor --target . --init-labels
+```
+
+Linux:
+
+```bash
+./agentry/.venv/bin/agentry doctor --target . --init-labels
+```
+
+The doctor checks:
+
+- target config loads and validates
+- every declared role has a rule file, target-specific or bundled
+- every configured CLI is on `PATH`
+- `agentry/.env` exists
+- `GITHUB_TOKEN` is set
+- `gh` can reach the configured target repo, when `gh` is installed
+
+### 5. Start
+
+Windows:
+
+```powershell
+.\agentry\start.ps1
+```
+
+Linux:
+
+```bash
+./agentry/start.sh
+```
+
+The first run creates `agentry/.venv/` and installs Agentry from the pinned
+GitHub ref stamped into the start script. Later runs reuse the venv. Set
+`AGENTRY_INSTALL_REF` only when you intentionally want to test or upgrade to a
+specific branch, tag, or commit.
+
+Agentry runs in the foreground. Press Ctrl-C or close the terminal to stop it.
 
 ---
 
-*End of how-to-use.md.*
+## Daily Operation
+
+Use `agentry status --target .` to inspect recent role logs.
+
+Per-role stdout logs are written to:
+
+```text
+agentry/logs/<role>/<timestamp>.log
+```
+
+Runtime state and session notes created by agents live under:
+
+```text
+agentry/state/
+```
+
+Both directories are ignored by the generated `agentry/.gitignore`.
+
+---
+
+## Role Model
+
+The standard target config runs six roles:
+
+- `researcher`
+- `architect`
+- `implementer`
+- `tester`
+- `reviewer`
+- `release`
+
+Each role is a loop:
+
+1. Agentry builds the role prompt from `agentry/config.yml`.
+2. Agentry spawns the configured CLI in the target repo.
+3. The CLI reads `docs/ai/roles/<role>.md`.
+4. The CLI does one cycle of work and exits.
+5. Agentry logs the run, reports notifications, sleeps, and starts the next
+   cycle later.
+
+The framework owns process supervision. GitHub issues, labels, PRs, branches,
+and the role rule files own the product workflow.
+
+---
+
+## Troubleshooting
+
+If a role never starts, run:
+
+```bash
+agentry doctor --target .
+```
+
+If a role starts but exits immediately, read its newest log under
+`agentry/logs/<role>/`.
+
+If a fresh venv installs the wrong Agentry version, check the ref in
+`agentry/start.ps1` or `agentry/start.sh`, delete `agentry/.venv/`, and rerun
+the start script.
+
+If GitHub operations fail, verify:
+
+- `GITHUB_TOKEN` is non-empty in `agentry/.env`
+- the token is restricted to the correct target repo
+- the token has contents, issues, pull request, and metadata permissions
+- `gh repo view <owner>/<repo>` works if roles or `doctor --init-labels` use
+  the GitHub CLI
+
+---
+
+## Removing Agentry
+
+Delete `agentry/`. Optionally delete `docs/ai/roles/` if you no longer want the
+role instructions in the target repo.

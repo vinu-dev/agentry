@@ -90,14 +90,17 @@ class Orchestrator:
             try:
                 self._role_loop(role, cfg, all_roles)
                 return
-            except Exception:  # noqa: BLE001
+            except Exception:
                 consecutive_crashes += 1
                 logger.exception("role %s crashed (#%d); restarting", role, consecutive_crashes)
                 self.notifier.emit(
                     Event(
                         role=role,
                         kind="thread-crashed",
-                        message=f"role thread crashed (#{consecutive_crashes}); orchestrator restarting it",
+                        message=(
+                            f"role thread crashed (#{consecutive_crashes}); "
+                            "orchestrator restarting it"
+                        ),
                         critical=True,
                     )
                 )

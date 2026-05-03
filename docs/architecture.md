@@ -1,6 +1,12 @@
 # Agentry — Architecture
 
-Status: **v0.0a-final (pre-implementation)**
+Status: **historical design note**
+
+For the current v0.1 operator contract, use
+[`COMPATIBILITY-SPEC.md`](../COMPATIBILITY-SPEC.md) and
+[`docs/how-to-use.md`](how-to-use.md). Some service-install and `.agentry/`
+references below describe an earlier design direction, not the implemented
+v0.1 workflow.
 
 ---
 

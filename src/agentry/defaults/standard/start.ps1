@@ -26,6 +26,9 @@ $ErrorActionPreference = 'Stop'
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $TargetRoot = Split-Path -Parent $ScriptDir
 $Venv = Join-Path $ScriptDir '.venv'
+$AgentryRepo = 'https://github.com/vinu-dev/agentry.git'
+$AgentryRef = 'a96ceaa'
+if ($env:AGENTRY_INSTALL_REF) { $AgentryRef = $env:AGENTRY_INSTALL_REF }
 
 # Locate Python.
 $python = $null
@@ -49,8 +52,8 @@ if (-not (Test-Path (Join-Path $Venv 'Scripts\python.exe'))) {
         exit 1
     }
     & (Join-Path $Venv 'Scripts\python.exe') -m pip install --upgrade pip
-    Write-Host "==> Installing agentry from GitHub" -ForegroundColor Cyan
-    & (Join-Path $Venv 'Scripts\python.exe') -m pip install 'git+https://github.com/vinu-dev/agentry.git'
+    Write-Host "==> Installing agentry from GitHub at $AgentryRef" -ForegroundColor Cyan
+    & (Join-Path $Venv 'Scripts\python.exe') -m pip install "git+$AgentryRepo@$AgentryRef"
     if ($LASTEXITCODE -ne 0) {
         Write-Host "agentry install failed" -ForegroundColor Red
         exit 1
@@ -66,4 +69,10 @@ if (-not (Test-Path $AgentryExe)) {
 }
 
 Write-Host "==> Starting agentry against $TargetRoot" -ForegroundColor Cyan
+Write-Host "==> Running doctor" -ForegroundColor Cyan
+& $AgentryExe doctor --target $TargetRoot
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "agentry doctor failed; fix the issues above and rerun start.ps1" -ForegroundColor Red
+    exit $LASTEXITCODE
+}
 & $AgentryExe start --target $TargetRoot

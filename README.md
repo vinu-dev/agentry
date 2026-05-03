@@ -10,7 +10,7 @@ The agents are commodity workers. The orchestrator is the value: it keeps the pi
 
 ## How it's used — gtest-style
 
-Agentry is a **dependency you pull into your target repo**, not a system service. Each repo gets its own `agentry/` folder with its own pinned-ish Python venv. Run `./agentry/start.ps1` (or `.sh`) to start it; close the terminal to stop. **No NSSM, no systemd, no service install.** Reboot kills it; you start it again when you want to work.
+Agentry is a **dependency you pull into your target repo**, not a system service. Each repo gets its own `agentry/` folder with a Python venv installed from the GitHub ref pinned in the start script. Run `./agentry/start.ps1` (or `.sh`) to start it; close the terminal to stop. **No NSSM, no systemd, no service install.** Reboot kills it; you start it again when you want to work.
 
 ```
 your-target-repo/                       ← e.g. rpi-home-monitor
