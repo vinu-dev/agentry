@@ -12,6 +12,7 @@ import json
 
 from agentry.supervisor import (
     _STATUS_RE,
+    _extract_result_from_event,
     _extract_text_from_event,
     _is_streamjson_mode,
     _parse_minutes,
@@ -119,6 +120,40 @@ class TestExtractTextFromEvent:
     def test_empty_input_returns_none(self):
         assert _extract_text_from_event("") is None
         assert _extract_text_from_event("   \n") is None
+
+
+class TestExtractResultFromEvent:
+    def test_success_result(self):
+        evt = json.dumps(
+            {
+                "type": "result",
+                "subtype": "success",
+                "is_error": False,
+                "terminal_reason": "completed",
+            }
+        )
+        result = _extract_result_from_event(evt)
+        assert result is not None
+        assert result.exit_code == 0
+        assert result.error_detail is None
+
+    def test_error_result(self):
+        evt = json.dumps(
+            {
+                "type": "result",
+                "subtype": "error",
+                "is_error": True,
+                "api_error_status": "rate_limited",
+            }
+        )
+        result = _extract_result_from_event(evt)
+        assert result is not None
+        assert result.exit_code == 1
+        assert result.error_detail == "rate_limited"
+
+    def test_non_result_returns_none(self):
+        assert _extract_result_from_event(json.dumps({"type": "assistant"})) is None
+        assert _extract_result_from_event("not json") is None
 
 
 class TestStatusRegex:

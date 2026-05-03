@@ -4,7 +4,13 @@ from __future__ import annotations
 
 import pytest
 
-from agentry.prompt import GENERIC_PROMPT_TEMPLATE, RUNTIME_CONTRACT, build_role_prompt, make_prompt
+from agentry.prompt import (
+    GENERIC_PROMPT_TEMPLATE,
+    INVOCATION_CONTRACT,
+    RUNTIME_CONTRACT,
+    build_role_prompt,
+    make_prompt,
+)
 
 
 class TestMakePrompt:
@@ -72,8 +78,14 @@ class TestMakePrompt:
         assert "`agent-approved`" in RUNTIME_CONTRACT
         assert "GitHub refuses self-review" in RUNTIME_CONTRACT
 
+    def test_invocation_contract_requires_immediate_execution(self):
+        assert "work order for this run" in INVOCATION_CONTRACT
+        assert "Start immediately" in INVOCATION_CONTRACT
+        assert "do not ask the" in INVOCATION_CONTRACT
+
     def test_build_role_prompt_wraps_custom_prompt(self):
         out = build_role_prompt("reviewer", ["reviewer"], "CUSTOM ROLE BODY")
         assert "Agentry Runtime Contract" in out
+        assert "Agentry Invocation" in out
         assert "CUSTOM ROLE BODY" in out
         assert "GitHub app connectors" in out
