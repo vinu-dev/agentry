@@ -7,6 +7,7 @@ from pathlib import Path
 from click.testing import CliRunner
 
 import agentry.cli as cli_module
+from agentry.session import begin_session, update_session
 
 
 def _write_config(target: Path) -> None:
@@ -70,5 +71,41 @@ def test_status_uses_ascii_log_bullets(tmp_path: Path):
     result = CliRunner().invoke(cli_module.cli, ["status", "--target", str(tmp_path)])
 
     assert result.exit_code == 0
+    assert "mode:      pipeline" in result.output
     assert "    - 123.log" in result.output
     assert "└" not in result.output
+
+
+def test_status_shows_session_tokens(tmp_path: Path):
+    _write_config(tmp_path)
+    log = tmp_path / "agentry" / "logs" / "architect" / "123.log"
+    log.parent.mkdir(parents=True)
+    log.write_text("hello\n", encoding="utf-8")
+    begin_session(
+        tmp_path,
+        role="architect",
+        log_path=log,
+        token_budget=25000,
+        mode="pipeline",
+    )
+    update_session(tmp_path, "architect", state="completed", pid=123, tokens_used=42)
+
+    result = CliRunner().invoke(cli_module.cli, ["status", "--target", str(tmp_path)])
+
+    assert result.exit_code == 0
+    assert "tokens=42/25000" in result.output
+
+
+def test_configure_defaults_updates_config(tmp_path: Path):
+    _write_config(tmp_path)
+
+    result = CliRunner().invoke(
+        cli_module.cli,
+        ["configure", "--target", str(tmp_path), "--defaults"],
+    )
+
+    assert result.exit_code == 0
+    assert "mode: pipeline" in result.output
+    text = (tmp_path / "agentry" / "config.yml").read_text(encoding="utf-8")
+    assert "mode: pipeline" in text
+    assert "token_budget: 25000" in text

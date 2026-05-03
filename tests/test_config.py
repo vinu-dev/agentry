@@ -52,6 +52,16 @@ class TestAgentConfig:
         with pytest.raises(ValidationError, match="more than a week"):
             AgentConfig(cli="claude", interval_min=10081, total_min=30, stall_min=5)
 
+    def test_max_sessions_is_one_for_now(self):
+        with pytest.raises(ValidationError, match="max_sessions must be 1"):
+            AgentConfig(
+                cli="claude",
+                interval_min=5,
+                total_min=30,
+                stall_min=5,
+                max_sessions=2,
+            )
+
     def test_empty_cli_rejected(self):
         with pytest.raises(ValidationError):
             AgentConfig(cli="", interval_min=5, total_min=30, stall_min=5)
@@ -105,6 +115,21 @@ class TestTargetConfig:
         assert cfg.target_repo == "user/repo"
         assert "architect" in cfg.agents
         assert cfg.isolate_worktrees is True
+        assert cfg.mode == "pipeline"
+        assert cfg.automation.auto_merge is False
+        assert cfg.research.allow_create_issues is False
+
+    def test_mode_validation(self):
+        with pytest.raises(ValidationError, match="mode must be"):
+            TargetConfig(
+                target_repo="user/repo",
+                mode="forever",
+                agents={
+                    "architect": AgentConfig(
+                        cli="claude", interval_min=5, total_min=30, stall_min=5
+                    ),
+                },
+            )
 
     def test_zero_agents_rejected(self):
         with pytest.raises(ValidationError):

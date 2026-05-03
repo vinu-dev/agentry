@@ -160,4 +160,12 @@ Next:
 
          curl -fsSL https://raw.githubusercontent.com/vinu-dev/agentry/main/scripts/add-to-target.sh | bash
 
+  3. Configure or inspect the target without starting agents:
+
+         ./agentry/start.sh gui --target .
+
+     Then start agents only when you want them active:
+
+         ./agentry/start.sh
+
 EOF

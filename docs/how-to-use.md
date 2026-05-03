@@ -1,12 +1,9 @@
 # Agentry - How to Use
 
-Status: **v0.1 alpha**
-
 Agentry is installed per target repository. You drop an `agentry/` folder into
 the repo, configure roles, add secrets locally, and run the foreground start
 script when you want the agent pipeline active. There is no host daemon,
-`agentry service install`, `agentry init`, or `agentry target add` command in
-v0.1.
+service installer, `agentry init`, or `agentry target add` command.
 
 ---
 
@@ -92,8 +89,30 @@ $EDITOR agentry/.env
 Set `GITHUB_TOKEN` at minimum. `DISCORD_WEBHOOK_URL`, `ANTHROPIC_API_KEY`, and
 `OPENAI_API_KEY` are optional.
 
-Edit `agentry/config.yml` to choose the CLI, args, and timeouts for each role.
-Edit `docs/ai/roles/*.md` for project-specific rules.
+Use the configuration wizard or dashboard to choose run mode, model profile,
+and which roles are allowed to run:
+
+Windows:
+
+```powershell
+.\agentry\start.ps1 configure --target . --defaults
+.\agentry\start.ps1 gui --target .
+```
+
+Linux:
+
+```bash
+./agentry/start.sh configure --target . --defaults
+./agentry/start.sh gui --target .
+```
+
+You can also edit `agentry/config.yml` directly to choose the CLI, args, and
+timeouts for each role. Edit `docs/ai/roles/*.md` for project-specific rules.
+
+The default run mode is `pipeline`: Agentry processes existing GitHub labels
+but does not let Researcher create new issues. Use `manual` to keep every role
+quiet, or `autonomous` plus `research.allow_create_issues: true` when you want
+Researcher to add new work.
 
 ### 4. Validate
 
@@ -156,12 +175,33 @@ GitHub ref stamped into the start script. Later runs reuse the venv. Set
 specific branch, tag, or commit.
 
 Agentry runs in the foreground. Press Ctrl-C or close the terminal to stop it.
+Rebooting the computer stops it too; there is no background service unless you
+create one yourself.
 
 ---
 
 ## Daily Operation
 
-Use `agentry status --target .` to inspect recent role logs.
+Use `agentry status --target .` to inspect role sessions, run mode, recent
+logs, and token-budget state. From a fresh target where the venv may not exist
+yet, use the start script wrapper:
+
+```powershell
+.\agentry\start.ps1 status --target .
+```
+
+```bash
+./agentry/start.sh status --target .
+```
+
+Use `agentry stop --target . ROLE` to stop one running role, or
+`agentry stop --target . --all` to stop all recorded running sessions. The stop
+path is conservative: completed or stale session files are not used to kill old
+PIDs.
+
+Use `agentry gui --target .` for a local status/configuration dashboard at
+`http://127.0.0.1:4783`, or launch it through the start script wrapper shown
+above.
 
 Per-role stdout logs are written to:
 
@@ -176,6 +216,15 @@ agentry/state/
 ```
 
 Both directories are ignored by the generated `agentry/.gitignore`.
+
+Role session records live under:
+
+```text
+agentry/state/sessions/<role>.json
+```
+
+If Agentry crashes or the computer restarts, old `running` records whose PIDs no
+longer exist are marked `stale` on the next start and do not block progress.
 
 ---
 
@@ -226,6 +275,17 @@ If GitHub operations fail, verify:
 - the token has contents, issues, pull request, and metadata permissions
 - `gh repo view <owner>/<repo>` works if roles or `doctor --init-labels` use
   the GitHub CLI
+
+If tokens are being consumed unexpectedly:
+
+- run `agentry status --target .`
+- open `agentry gui --target .`
+- use `agentry stop --target . --all`
+- switch `mode: manual` in `agentry/config.yml` or through the GUI
+- check whether Researcher is enabled only in `autonomous` mode
+
+For the detailed watchdog/session design, see
+[`docs/watchdog-and-dashboard.md`](watchdog-and-dashboard.md).
 
 ---
 

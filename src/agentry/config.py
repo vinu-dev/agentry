@@ -77,6 +77,23 @@ class AgentConfig(BaseModel):
         default=True,
         description="When false, wait interval_min before the first run after startup.",
     )
+    max_sessions: int = Field(
+        default=1,
+        gt=0,
+        description="Maximum active sessions for this role. Agentry currently enforces one.",
+    )
+    token_budget: int | None = Field(
+        default=None,
+        gt=0,
+        description=(
+            "Soft token budget for one role run. Exceeding it is recorded in session state."
+        ),
+    )
+    checkin_response_seconds: int = Field(
+        default=90,
+        gt=0,
+        description="Seconds to wait for a STATUS reply when the CLI supports check-ins.",
+    )
     total_min: int = Field(..., gt=0, description="Kill subprocess if it exceeds N minutes total")
     stall_min: int = Field(..., gt=0, description="Kill subprocess if no stdout for N minutes")
     trigger: AgentTriggerConfig | None = Field(
@@ -100,16 +117,58 @@ class AgentConfig(BaseModel):
             )
         return v
 
+    @field_validator("max_sessions")
+    @classmethod
+    def _one_session_for_now(cls, v: int) -> int:
+        if v != 1:
+            raise ValueError("max_sessions must be 1 in this release")
+        return v
+
+
+class AutomationConfig(BaseModel):
+    """Operator-level controls for running Agentry safely."""
+
+    auto_merge: bool = Field(
+        default=False,
+        description="Reserved for future use. Default is human/code-owner merge.",
+    )
+    stop_when_queue_empty: bool = Field(
+        default=False,
+        description="Reserved for future use. Foreground start currently waits for new work.",
+    )
+
+
+class ResearchConfig(BaseModel):
+    """Controls for whether Agentry may create new work."""
+
+    allow_create_issues: bool = Field(
+        default=False,
+        description=(
+            "Researcher may open new issues only when this and autonomous mode are enabled."
+        ),
+    )
+    max_open_ready_for_design: int = Field(
+        default=3,
+        ge=0,
+        description="Recommended backlog guard before researcher creates more design-ready issues.",
+    )
+
 
 class TargetConfig(BaseModel):
     """Top-level shape of ``<target>/agentry/config.yml``."""
 
     target_repo: str = Field(..., min_length=1)
+    mode: str = Field(
+        default="pipeline",
+        description="manual, pipeline, or autonomous.",
+    )
     agents: dict[str, AgentConfig] = Field(..., min_length=1)
     isolate_worktrees: bool = Field(
         default=True,
         description="Run each role in its own git worktree when the target is a git repo.",
     )
+    automation: AutomationConfig = Field(default_factory=AutomationConfig)
+    research: ResearchConfig = Field(default_factory=ResearchConfig)
     sensitive_paths: list[str] = Field(default_factory=list)
     labels: dict[str, str] = Field(default_factory=dict)
 
@@ -122,6 +181,14 @@ class TargetConfig(BaseModel):
             if not role_name or " " in role_name or "/" in role_name:
                 raise ValueError(f"invalid role name: {role_name!r}")
         return v
+
+    @field_validator("mode")
+    @classmethod
+    def _known_mode(cls, v: str) -> str:
+        mode = v.strip().lower()
+        if mode not in {"manual", "pipeline", "autonomous"}:
+            raise ValueError("mode must be manual, pipeline, or autonomous")
+        return mode
 
 
 # -----------------------------------------------------------------------------
@@ -232,6 +299,8 @@ def load_target_env(target_path: Path | str) -> None:
 
 __all__ = [
     "AgentConfig",
+    "AutomationConfig",
+    "ResearchConfig",
     "TargetConfig",
     "ValidationError",
     "bundled_default_config_path",

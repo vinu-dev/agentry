@@ -19,7 +19,10 @@
 #>
 
 [CmdletBinding()]
-param()
+param(
+    [Parameter(ValueFromRemainingArguments = $true)]
+    [string[]]$AgentryArgs
+)
 
 $ErrorActionPreference = 'Stop'
 
@@ -78,6 +81,12 @@ if (-not (Test-Path $AgentryExe)) {
 }
 
 Write-Host "==> Starting agentry against $TargetRoot" -ForegroundColor Cyan
+if ($AgentryArgs.Count -gt 0) {
+    Write-Host "==> Running agentry $($AgentryArgs -join ' ')" -ForegroundColor Cyan
+    & $AgentryExe @AgentryArgs
+    exit $LASTEXITCODE
+}
+
 Write-Host "==> Running doctor" -ForegroundColor Cyan
 & $AgentryExe doctor --target $TargetRoot
 if ($LASTEXITCODE -ne 0) {

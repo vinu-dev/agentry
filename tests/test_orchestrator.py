@@ -24,9 +24,11 @@ from agentry.notify import DiscordNotifier
 from agentry.orchestrator import (
     USAGE_LIMIT_BACKOFF_FALLBACK_SECONDS,
     Orchestrator,
+    _role_allowed_by_mode,
     _role_has_work,
     _usage_limit_backoff_seconds,
 )
+from agentry.session import read_session
 
 
 def _make_orchestrator(
@@ -79,6 +81,16 @@ class TestOrchestrator:
             assert logs, "no log file produced after one iteration"
             content = logs[0].read_text(encoding="utf-8")
             assert "one iteration done" in content
+            deadline = time.monotonic() + 10.0
+            session = None
+            while time.monotonic() < deadline:
+                session = read_session(tmp_path, "tester")
+                if session and session.get("state") == "completed":
+                    break
+                time.sleep(0.2)
+            assert session is not None
+            assert session["state"] == "completed"
+            assert session["pid"] is not None
         finally:
             orch.shutdown()
             orch.notifier.stop(timeout=2.0)
@@ -214,6 +226,55 @@ def test_disabled_roles_do_not_start_threads(tmp_path: Path):
     finally:
         orch.shutdown()
         orch.notifier.stop(timeout=2.0)
+
+
+def test_manual_mode_starts_no_role_threads(tmp_path: Path):
+    target_config = TargetConfig(
+        target_repo="test/repo",
+        mode="manual",
+        agents={
+            "implementer": AgentConfig(
+                cli=sys.executable,
+                args=["-c", "print('should not run')"],
+                interval_min=60,
+                total_min=1,
+                stall_min=1,
+            ),
+        },
+    )
+    orch = Orchestrator(
+        target_config=target_config,
+        target_path=tmp_path,
+        notifier=DiscordNotifier(webhook_url=None),
+    )
+
+    orch.start()
+
+    assert orch._threads == []
+
+
+def test_pipeline_mode_blocks_researcher_unless_autonomous():
+    researcher = AgentConfig(
+        cli=sys.executable,
+        args=["-c", "print('research')"],
+        interval_min=60,
+        total_min=1,
+        stall_min=1,
+    )
+    pipeline_cfg = TargetConfig(
+        target_repo="test/repo",
+        mode="pipeline",
+        agents={"researcher": researcher},
+    )
+    autonomous_cfg = TargetConfig(
+        target_repo="test/repo",
+        mode="autonomous",
+        research={"allow_create_issues": True},
+        agents={"researcher": researcher},
+    )
+
+    assert not _role_allowed_by_mode(pipeline_cfg, "researcher")
+    assert _role_allowed_by_mode(autonomous_cfg, "researcher")
 
 
 def test_role_trigger_skips_when_no_matching_github_work(monkeypatch, tmp_path: Path):
