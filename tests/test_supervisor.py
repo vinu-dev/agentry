@@ -137,6 +137,36 @@ class TestSupervise:
         assert run.exit_code is None
         assert run.error_detail is not None
 
+    def test_streamjson_result_event_ends_run(self, tmp_path: Path):
+        """A result event marks print-mode completion even while stdin is open."""
+        log = tmp_path / "stream.log"
+        code = (
+            "import json, sys\n"
+            "sys.stdin.readline()\n"
+            "print(json.dumps({'type':'assistant','message':{'role':'assistant',"
+            "'content':[{'type':'text','text':'done'}]}}), flush=True)\n"
+            "print(json.dumps({'type':'result','subtype':'success','is_error':False,"
+            "'terminal_reason':'completed'}), flush=True)\n"
+            "for _ in sys.stdin:\n"
+            "    pass\n"
+        )
+        started = time.monotonic()
+        run = supervise(
+            cli=sys.executable,
+            args=["-c", code, "--input-format=stream-json"],
+            cwd=tmp_path,
+            env=None,
+            stall_seconds=30,
+            total_seconds=30,
+            log_path=log,
+            stdin_input="hello",
+        )
+
+        assert run.reason == ExitReason.NORMAL
+        assert run.exit_code == 0
+        assert time.monotonic() - started < 10.0
+        assert '"type": "result"' in log.read_text(encoding="utf-8")
+
     def test_invalid_timeouts_raise(self, tmp_path: Path):
         log = tmp_path / "out.log"
         with pytest.raises(ValueError):

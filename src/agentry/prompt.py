@@ -45,6 +45,16 @@ RUNTIME_CONTRACT = """\
   a duplicate.
 """
 
+INVOCATION_CONTRACT = """\
+## Agentry Invocation
+
+This message is the work order for this run. Start immediately; do not ask the
+operator what to do or wait for another instruction. If no matching work exists,
+exit successfully after doing any role-specific no-work logging required by the
+instructions. Otherwise, process the role's configured scope, perform the
+required writebacks, and exit.
+"""
+
 
 GENERIC_PROMPT_TEMPLATE = """\
 You are the {role_name} in an autonomous software development pipeline.
@@ -115,4 +125,4 @@ def build_role_prompt(
     writeback semantics) consistent across targets and model providers.
     """
     base = configured_prompt if configured_prompt is not None else make_prompt(role_name, all_roles)
-    return f"{RUNTIME_CONTRACT.strip()}\n\n{base.strip()}\n"
+    return f"{RUNTIME_CONTRACT.strip()}\n\n{INVOCATION_CONTRACT.strip()}\n\n{base.strip()}\n"

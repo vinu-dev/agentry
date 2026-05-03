@@ -77,6 +77,14 @@ class SupervisedRun:
     pid: int | None = None
 
 
+@dataclass(frozen=True)
+class _StreamJsonCompletion:
+    """Completion signal emitted by a stream-JSON CLI result event."""
+
+    exit_code: int
+    error_detail: str | None = None
+
+
 # -----------------------------------------------------------------------------
 # Public entrypoint
 # -----------------------------------------------------------------------------
@@ -369,9 +377,12 @@ def _supervise_streamjson(
         last_event_at = time.monotonic()
         text_buffer: list[str] = []
         text_buffer_lock = threading.Lock()
+        completion_event = threading.Event()
+        completion_lock = threading.Lock()
+        completion: _StreamJsonCompletion | None = None
 
         def reader() -> None:
-            nonlocal last_event_at
+            nonlocal completion, last_event_at
             assert proc is not None
             try:
                 for line in iter(proc.stdout.readline, ""):  # type: ignore[union-attr]
@@ -383,6 +394,11 @@ def _supervise_streamjson(
                         log_file.write(line)
                     if on_output is not None:
                         on_output()
+                    result = _extract_result_from_event(line)
+                    if result is not None:
+                        with completion_lock:
+                            completion = result
+                        completion_event.set()
                     text = _extract_text_from_event(line)
                     if text:
                         with text_buffer_lock:
@@ -399,6 +415,28 @@ def _supervise_streamjson(
         reader_thread.start()
 
         while True:
+            # Claude Code emits a terminal `result` event when the agent has
+            # completed its print-mode turn, but it keeps the process alive
+            # while stdin remains open for more stream-JSON messages. Treat
+            # that event as the role-run boundary, then close stdin so the
+            # process can exit cleanly.
+            if completion_event.is_set():
+                with completion_lock:
+                    result = completion or _StreamJsonCompletion(exit_code=0)
+                _close_stdin(proc)
+                if not _wait_exit(proc, timeout=30.0):
+                    log_file.write("--- result event seen but process did not exit; killing ---\n")
+                    _kill_tree(proc)
+                reader_thread.join(timeout=2.0)
+                return SupervisedRun(
+                    reason=ExitReason.NORMAL if result.exit_code == 0 else ExitReason.NONZERO,
+                    exit_code=result.exit_code,
+                    duration_seconds=time.monotonic() - start,
+                    stdout_path=log_path,
+                    error_detail=result.error_detail,
+                    pid=proc.pid,
+                )
+
             # Subprocess finished on its own.
             ret = proc.poll()
             if ret is not None:
@@ -444,18 +482,14 @@ def _supervise_streamjson(
                     _kill_tree(proc)
                     reader_thread.join(timeout=2.0)
                     return SupervisedRun(
-                        reason=ExitReason.TIMED_OUT
-                        if triggered == "total"
-                        else ExitReason.STALLED,
+                        reason=ExitReason.TIMED_OUT if triggered == "total" else ExitReason.STALLED,
                         exit_code=proc.returncode,
                         duration_seconds=time.monotonic() - start,
                         stdout_path=log_path,
                         pid=proc.pid,
                     )
 
-                log_file.write(
-                    f"\n--- {triggered} threshold hit, sending AGENTRY-CHECKIN ---\n"
-                )
+                log_file.write(f"\n--- {triggered} threshold hit, sending AGENTRY-CHECKIN ---\n")
 
                 action, detail = _do_checkin(
                     proc=proc,
@@ -478,8 +512,7 @@ def _supervise_streamjson(
                     extensions_used += 1
                     deadline = max(deadline, time.monotonic()) + stall_seconds
                     log_file.write(
-                        f"--- check-in: STATUS:WORKING (ext #{extensions_used}); "
-                        f"continuing ---\n"
+                        f"--- check-in: STATUS:WORKING (ext #{extensions_used}); continuing ---\n"
                     )
                     continue
 
@@ -552,9 +585,7 @@ def _supervise_streamjson(
                 _kill_tree(proc)
                 reader_thread.join(timeout=2.0)
                 return SupervisedRun(
-                    reason=ExitReason.TIMED_OUT
-                    if triggered == "total"
-                    else ExitReason.STALLED,
+                    reason=ExitReason.TIMED_OUT if triggered == "total" else ExitReason.STALLED,
                     exit_code=proc.returncode,
                     duration_seconds=time.monotonic() - start,
                     stdout_path=log_path,
@@ -679,6 +710,32 @@ def _extract_text_from_event(line: str) -> str | None:
     return "\n".join(parts)
 
 
+def _extract_result_from_event(line: str) -> _StreamJsonCompletion | None:
+    """Extract completion status from a stream-JSON ``result`` event."""
+    line = line.strip()
+    if not line or not line.startswith("{"):
+        return None
+    try:
+        evt = json.loads(line)
+    except (json.JSONDecodeError, ValueError):
+        return None
+    if evt.get("type") != "result":
+        return None
+
+    is_error = bool(evt.get("is_error")) or evt.get("subtype") == "error"
+    detail = None
+    for key in ("api_error_status", "terminal_reason", "result"):
+        value = evt.get(key)
+        if isinstance(value, str) and value:
+            detail = value
+            break
+
+    return _StreamJsonCompletion(
+        exit_code=1 if is_error else 0,
+        error_detail=detail if is_error else None,
+    )
+
+
 def _parse_minutes(s: str | None) -> int | None:
     """Best-effort integer-minutes extraction from STATUS:NEEDMORETIME detail."""
     if not s:
@@ -780,9 +837,7 @@ def _spawn(
     }
 
     if sys.platform == "win32":
-        popen_kwargs["creationflags"] = (
-            subprocess.CREATE_NEW_PROCESS_GROUP  # type: ignore[attr-defined]
-        )
+        popen_kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP  # type: ignore[attr-defined]
     else:
         popen_kwargs["start_new_session"] = True  # detach from caller's process group
 
