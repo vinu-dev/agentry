@@ -88,7 +88,7 @@ Different projects need different roles. The framework supports any roster a tar
 | 2 | **architect** | issues `ready-for-design` | design doc + relabel `ready-for-implementation` |
 | 3 | **implementer** | issues `ready-for-implementation` (or `tests-failed`) | code on branch + relabel `ready-for-test` |
 | 4 | **tester** | issues `ready-for-test` | runs tests; if green opens PR `ready-for-review`, if red `tests-failed` |
-| 5 | **reviewer** | PRs `ready-for-review` | approves OR labels `blocked` |
+| 5 | **reviewer** | PRs `ready-for-review` | formal approval when allowed; otherwise `agent-approved` fallback OR `blocked` |
 | 6 | **release** | merged commits since last tag | tag + build + GitHub Release |
 
 ### Extended roster for regulated software (medical device example)

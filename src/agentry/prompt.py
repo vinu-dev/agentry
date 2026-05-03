@@ -20,15 +20,21 @@ RUNTIME_CONTRACT = """\
   permissions as the operator's `gh` auth.
 - After every label, comment, PR, or review writeback, verify the result with
   `gh issue view`, `gh pr view`, or `gh pr list`.
-- If a formal `gh pr review` write fails, immediately fall back to `gh pr
-  comment` with the same review outcome and then update labels with `gh pr edit`
-  / `gh issue edit`.
+- If a formal `gh pr review` write fails or GitHub refuses self-review,
+  immediately fall back to `gh pr comment` with the same review outcome. Treat
+  the verified comment plus labels as the canonical Agentry outcome.
+- Approved PRs must end with label `agent-approved` and without
+  `ready-for-review`, `blocked`, or retry labels. Request-changes outcomes must
+  remove `agent-approved`, remove `ready-for-review`, add `blocked`, and move
+  the linked issue to `changes-requested`.
+- If `agent-approved` is missing in the target repo, create it before applying
+  it: `gh label create agent-approved --color 0e8a16 --force`.
 - Never leave an item in the same trigger label after a completed cycle. Move it
   forward, move it back to a retry label, or mark it blocked with a comment that
   explains the next human or agent action.
 - When moving work out of a blocked/retry state after a successful correction or
-  approval, remove stale blocking labels such as `blocked`, `changes-requested`,
-  and `tests-failed` from the relevant issue or PR.
+  approval, remove stale state labels such as `blocked`, `changes-requested`,
+  `tests-failed`, and stale `agent-approved` from the relevant issue or PR.
 - Before creating a PR for a feature branch, check whether an open PR already
   exists for that branch. Reuse and relabel the existing PR instead of creating
   a duplicate.
