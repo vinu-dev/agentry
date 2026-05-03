@@ -23,6 +23,7 @@ from agentry.notify import DiscordNotifier
 from agentry.orchestrator import (
     USAGE_LIMIT_BACKOFF_FALLBACK_SECONDS,
     Orchestrator,
+    _role_has_work,
     _usage_limit_backoff_seconds,
 )
 
@@ -161,3 +162,133 @@ def test_usage_limit_backoff_ignores_normal_logs(tmp_path: Path):
     log_path.write_text("normal run\n", encoding="utf-8")
 
     assert _usage_limit_backoff_seconds(log_path) is None
+
+
+def test_disabled_roles_do_not_start_threads(tmp_path: Path):
+    target_config = TargetConfig(
+        target_repo="test/repo",
+        agents={
+            "researcher": AgentConfig(
+                enabled=False,
+                cli=sys.executable,
+                args=["-c", "print('should not run')"],
+                interval_min=1,
+                total_min=1,
+                stall_min=1,
+                prompt="disabled",
+            ),
+            "implementer": AgentConfig(
+                cli=sys.executable,
+                args=["-c", "print('enabled role ran')"],
+                interval_min=60,
+                total_min=1,
+                stall_min=1,
+                prompt="enabled",
+            ),
+        },
+    )
+    notifier = DiscordNotifier(webhook_url=None, flush_seconds=10)
+    notifier.start()
+    orch = Orchestrator(
+        target_config=target_config,
+        target_path=tmp_path,
+        notifier=notifier,
+    )
+    try:
+        orch.start()
+        assert [t.name for t in orch._threads] == ["role-implementer"]
+
+        disabled_log_dir = target_logs_dir(tmp_path) / "researcher"
+        enabled_log_dir = target_logs_dir(tmp_path) / "implementer"
+        deadline = time.monotonic() + 30.0
+        while time.monotonic() < deadline:
+            if enabled_log_dir.is_dir() and any(enabled_log_dir.glob("*.log")):
+                break
+            time.sleep(0.5)
+
+        assert not disabled_log_dir.exists()
+        logs = list(enabled_log_dir.glob("*.log"))
+        assert logs
+        assert "enabled role ran" in logs[0].read_text(encoding="utf-8")
+    finally:
+        orch.shutdown()
+        orch.notifier.stop(timeout=2.0)
+
+
+def test_role_trigger_skips_when_no_matching_github_work(monkeypatch, tmp_path: Path):
+    target_config = TargetConfig(
+        target_repo="test/repo",
+        agents={
+            "tester": AgentConfig(
+                cli=sys.executable,
+                args=["-c", "print('should not run')"],
+                interval_min=60,
+                total_min=1,
+                stall_min=1,
+                trigger={"issue_labels": ["ready-for-test"]},
+                prompt="gated",
+            ),
+        },
+    )
+    monkeypatch.setattr(
+        "agentry.orchestrator.has_open_issue_with_label",
+        lambda repo, label: False,
+    )
+    monkeypatch.setattr(
+        "agentry.orchestrator.has_open_pr_with_label",
+        lambda repo, label: False,
+    )
+
+    assert not _role_has_work(target_config, target_config.agents["tester"])
+
+
+def test_role_trigger_runs_when_issue_label_matches(monkeypatch):
+    target_config = TargetConfig(
+        target_repo="test/repo",
+        agents={
+            "implementer": AgentConfig(
+                cli=sys.executable,
+                args=[],
+                interval_min=60,
+                total_min=1,
+                stall_min=1,
+                trigger={"issue_labels": ["ready-for-implementation", "tests-failed"]},
+            ),
+        },
+    )
+    monkeypatch.setattr(
+        "agentry.orchestrator.has_open_issue_with_label",
+        lambda repo, label: label == "tests-failed",
+    )
+    monkeypatch.setattr(
+        "agentry.orchestrator.has_open_pr_with_label",
+        lambda repo, label: False,
+    )
+
+    assert _role_has_work(target_config, target_config.agents["implementer"])
+
+
+def test_role_trigger_runs_when_pr_label_matches(monkeypatch):
+    target_config = TargetConfig(
+        target_repo="test/repo",
+        agents={
+            "reviewer": AgentConfig(
+                cli=sys.executable,
+                args=[],
+                interval_min=60,
+                total_min=1,
+                stall_min=1,
+                trigger={"pr_labels": ["ready-for-review"]},
+            ),
+        },
+    )
+    monkeypatch.setattr(
+        "agentry.orchestrator.has_open_issue_with_label",
+        lambda repo, label: False,
+    )
+    monkeypatch.setattr(
+        "agentry.orchestrator.has_open_pr_with_label",
+        lambda repo, label: label == "ready-for-review",
+    )
+
+    assert _role_has_work(target_config, target_config.agents["reviewer"])

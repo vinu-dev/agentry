@@ -28,6 +28,8 @@ class TestAgentConfig:
         assert cfg.cli == "claude"
         assert cfg.args == []
         assert cfg.prompt is None
+        assert cfg.enabled is True
+        assert cfg.run_on_start is True
 
     def test_prompt_is_optional(self):
         cfg = AgentConfig(
@@ -52,6 +54,41 @@ class TestAgentConfig:
     def test_empty_cli_rejected(self):
         with pytest.raises(ValidationError):
             AgentConfig(cli="", interval_min=5, total_min=30, stall_min=5)
+
+    def test_trigger_requires_at_least_one_label_gate(self):
+        with pytest.raises(ValidationError, match="trigger must declare"):
+            AgentConfig(
+                cli="claude",
+                interval_min=5,
+                total_min=30,
+                stall_min=5,
+                trigger={},
+            )
+
+    def test_trigger_rejects_empty_labels(self):
+        with pytest.raises(ValidationError, match="trigger labels cannot be empty"):
+            AgentConfig(
+                cli="claude",
+                interval_min=5,
+                total_min=30,
+                stall_min=5,
+                trigger={"issue_labels": ["ready-for-test", ""]},
+            )
+
+    def test_trigger_accepts_issue_and_pr_labels(self):
+        cfg = AgentConfig(
+            cli="claude",
+            interval_min=5,
+            total_min=30,
+            stall_min=5,
+            trigger={
+                "issue_labels": ["ready-for-test"],
+                "pr_labels": ["ready-for-review"],
+            },
+        )
+        assert cfg.trigger is not None
+        assert cfg.trigger.issue_labels == ["ready-for-test"]
+        assert cfg.trigger.pr_labels == ["ready-for-review"]
 
 
 class TestTargetConfig:

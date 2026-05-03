@@ -10,8 +10,6 @@ from __future__ import annotations
 
 import json
 
-import pytest
-
 from agentry.supervisor import (
     _STATUS_RE,
     _extract_text_from_event,
