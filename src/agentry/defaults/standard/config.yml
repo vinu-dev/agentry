@@ -28,8 +28,9 @@
 # Expensive LLM runs are gated by cheap scheduler checks:
 #   trigger.issue_labels -> run only when a matching open issue exists
 #   trigger.pr_labels    -> run only when a matching open PR exists
-# Roles with run_on_start: false sleep their first interval before the first
-# run, which prevents scheduled discovery roles from firing on every reboot.
+# Run mode defaults to pipeline: Agentry processes existing GitHub labels but
+# does not create new research issues unless the operator explicitly switches
+# to autonomous mode and enables researcher.
 #
 # The default model tiering keeps cost down while preserving judgment where
 # defects are expensive:
@@ -39,12 +40,22 @@
 # target repo needs a different provider.
 
 target_repo: <owner>/<repo>           # filled in by add-to-target per repo
+mode: pipeline                        # manual | pipeline | autonomous
 isolate_worktrees: true              # one git worktree per role for safe parallelism
+
+automation:
+  auto_merge: false                   # human/code-owner merge by default
+  stop_when_queue_empty: false        # foreground process waits for future work
+
+research:
+  allow_create_issues: false          # researcher off unless autonomous
+  max_open_ready_for_design: 3
 
 agents:
 
   researcher:
-    cli: npx.cmd                      # npx on POSIX shells
+    enabled: false                    # enable only for autonomous discovery
+    cli: npx                          # agentry resolves npx.cmd on Windows
     args: ["--yes", "@openai/codex", "exec", "-m", "gpt-5.4-mini", "--dangerously-bypass-approvals-and-sandbox"]
     # Research is intentionally scheduled, not startup-triggered: it is the
     # highest-token role and should not run every time the host reboots.
@@ -52,6 +63,9 @@ agents:
     interval_min: 1440
     total_min: 30
     stall_min: 30        # = total_min: no stall-kill, only total-timeout safety
+    max_sessions: 1
+    token_budget: 20000
+    checkin_response_seconds: 90
     prompt: |
       You are the Researcher in a parallel multi-agent pipeline. Other roles
       (architect, implementer, tester, reviewer, release) run concurrently.
@@ -137,13 +151,16 @@ agents:
       If that file is missing, exit with error.
 
   architect:
-    cli: npx.cmd                      # npx on POSIX shells
+    cli: npx                          # agentry resolves npx.cmd on Windows
     args: ["--yes", "@openai/codex", "exec", "-m", "gpt-5.4", "--dangerously-bypass-approvals-and-sandbox"]
     trigger:
       issue_labels: ["ready-for-design"]
     interval_min: 5
     total_min: 30
     stall_min: 30        # = total_min
+    max_sessions: 1
+    token_budget: 25000
+    checkin_response_seconds: 90
     prompt: |
       You are the Architect in a parallel multi-agent pipeline. Other roles
       run concurrently with you.
@@ -233,13 +250,16 @@ agents:
       If that file is missing, exit with error.
 
   implementer:
-    cli: npx.cmd                      # npx on POSIX shells
+    cli: npx                          # agentry resolves npx.cmd on Windows
     args: ["--yes", "@openai/codex", "exec", "-m", "gpt-5.4", "--dangerously-bypass-approvals-and-sandbox"]
     trigger:
       issue_labels: ["changes-requested", "tests-failed", "ready-for-implementation"]
     interval_min: 5
     total_min: 60
     stall_min: 60        # = total_min
+    max_sessions: 1
+    token_budget: 60000
+    checkin_response_seconds: 90
     prompt: |
       You are the Implementer in a parallel multi-agent pipeline. Other
       roles run concurrently with you.
@@ -332,13 +352,16 @@ agents:
       If that file is missing, exit with error.
 
   tester:
-    cli: npx.cmd                      # npx on POSIX shells
+    cli: npx                          # agentry resolves npx.cmd on Windows
     args: ["--yes", "@openai/codex", "exec", "-m", "gpt-5.4-mini", "--dangerously-bypass-approvals-and-sandbox"]
     trigger:
       issue_labels: ["ready-for-test"]
     interval_min: 5
     total_min: 30
     stall_min: 30        # = total_min
+    max_sessions: 1
+    token_budget: 30000
+    checkin_response_seconds: 90
     prompt: |
       You are the Tester in a parallel multi-agent pipeline. Other roles run
       concurrently with you.
@@ -423,13 +446,16 @@ agents:
       If that file is missing, exit with error.
 
   reviewer:
-    cli: npx.cmd                      # npx on POSIX shells
+    cli: npx                          # agentry resolves npx.cmd on Windows
     args: ["--yes", "@openai/codex", "exec", "-m", "gpt-5.4", "--dangerously-bypass-approvals-and-sandbox"]
     trigger:
       pr_labels: ["ready-for-review"]
     interval_min: 5
     total_min: 20
     stall_min: 20        # = total_min
+    max_sessions: 1
+    token_budget: 25000
+    checkin_response_seconds: 90
     prompt: |
       You are the Reviewer in a parallel multi-agent pipeline. Other roles
       run concurrently with you.
@@ -524,13 +550,17 @@ agents:
       If that file is missing, exit with error.
 
   release:
-    cli: npx.cmd                      # npx on POSIX shells
+    enabled: false                    # enable when the repo has a release plan
+    cli: npx                          # agentry resolves npx.cmd on Windows
     args: ["--yes", "@openai/codex", "exec", "-m", "gpt-5.4-mini", "--dangerously-bypass-approvals-and-sandbox"]
     trigger:
       issue_labels: ["release-approved"]
     interval_min: 1440
     total_min: 60
     stall_min: 60        # = total_min
+    max_sessions: 1
+    token_budget: 30000
+    checkin_response_seconds: 90
     prompt: |
       You are the Release Engineer in a parallel multi-agent pipeline. Other
       roles run concurrently with you.

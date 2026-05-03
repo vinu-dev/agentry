@@ -72,6 +72,30 @@ codex login
 
 Foreground. Ctrl-C to stop. Close the terminal to stop. Reboot kills it. **No service.** Run the script again when you want it running again.
 
+### Configure or inspect without starting agents
+
+The start scripts can also launch the repo-local Agentry CLI after creating the
+venv:
+
+```powershell
+# Windows
+.\agentry\start.ps1 gui --target .
+.\agentry\start.ps1 configure --target . --defaults
+.\agentry\start.ps1 stop --target . --all
+```
+
+```bash
+# Linux
+./agentry/start.sh gui --target .
+./agentry/start.sh configure --target . --defaults
+./agentry/start.sh stop --target . --all
+```
+
+The default mode is `pipeline`: existing labels move through Architect,
+Implementer, Tester, and Reviewer, but Researcher does not create new issues.
+Use `manual` when you want no roles to start, and use `autonomous` only when
+you explicitly want Researcher to add work.
+
 ## To upgrade Agentry
 
 Delete `.venv/` and run `start.ps1` / `start.sh` again. The venv is recreated and pulls the latest from GitHub.

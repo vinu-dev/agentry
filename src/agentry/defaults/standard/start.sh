@@ -57,6 +57,11 @@ if [[ ! -x "$VENV/bin/agentry" ]]; then
 fi
 
 echo "==> Starting agentry against $TARGET_ROOT"
+if [[ "$#" -gt 0 ]]; then
+    echo "==> Running agentry $*"
+    exec "$VENV/bin/agentry" "$@"
+fi
+
 echo "==> Running doctor"
 "$VENV/bin/agentry" doctor --target "$TARGET_ROOT"
 exec "$VENV/bin/agentry" start --target "$TARGET_ROOT"

@@ -79,7 +79,7 @@ This downloads the `agentry/` folder skeleton + role rule file skeletons into th
 You then:
 
 1. Copy `agentry/.env.example` to `agentry/.env` and fill in your `GITHUB_TOKEN`
-2. Edit `agentry/config.yml` if you want to change which CLI handles which role (default: Codex for implementation, Claude for everything else)
+2. Edit `agentry/config.yml` or run the GUI if you want to change which CLI/model handles which role (default: optimized Codex model tiers)
 3. (Optional) Edit `docs/ai/roles/*.md` for project-specific instructions
 
 ### 3. Every time you want it running — start it
@@ -98,6 +98,24 @@ cd ~/projects/rpi-home-monitor
 
 First run: creates `agentry/.venv/`, pip-installs agentry into it. Subsequent runs: just activates the venv and starts the orchestrator. Foreground; Ctrl-C to stop.
 
+To configure without starting agents:
+
+```powershell
+# Windows
+.\agentry\start.ps1 gui --target .
+```
+
+```bash
+# Linux
+./agentry/start.sh gui --target .
+```
+
+The dashboard shows role sessions, latest logs, token budget state, and Stop
+buttons. It also writes the recommended config options: `manual`, `pipeline`,
+or `autonomous` mode; Researcher and Release toggles; and balanced/cheap/strong
+model profiles. `pipeline` is the default, so Agentry processes existing GitHub
+labels but does not let Researcher create new issues.
+
 ## What you actually edit per role
 
 Open `agentry/config.yml`. Looks like this:
@@ -107,21 +125,23 @@ target_repo: vinu-dev/rpi-home-monitor
 
 agents:
   researcher:
-    cli: claude
-    args: ["-p", "--dangerously-skip-permissions"]
+    cli: npx
+    args: ["--yes", "@openai/codex", "exec", "-m", "gpt-5.4-mini", "--dangerously-bypass-approvals-and-sandbox"]
     interval_min: 60
     total_min: 30
-    stall_min: 5
+    stall_min: 30
+    token_budget: 20000
     prompt: |
       You are the Researcher. Read docs/ai/roles/researcher.md and follow it.
       If that file doesn't exist, exit with error.
 
   implementer:
-    cli: codex
-    args: ["--auto-approve"]
+    cli: npx
+    args: ["--yes", "@openai/codex", "exec", "-m", "gpt-5.4", "--dangerously-bypass-approvals-and-sandbox"]
     interval_min: 5
     total_min: 60
-    stall_min: 10
+    stall_min: 60
+    token_budget: 60000
     prompt: |
       You are the Implementer. Read docs/ai/roles/implementer.md and follow it.
   # ... etc for the other 4 roles
@@ -131,7 +151,17 @@ Change the `cli:` field to switch which LLM handles each role. The prompt points
 
 ## Watching what it does
 
-Per-role logs land in your target at `agentry/logs/<role>/<timestamp>.log`. Tail with `tail -f` (or `Get-Content -Wait` on Windows), or run `agentry status` from the target dir for a per-role summary.
+Per-role logs land in your target at `agentry/logs/<role>/<timestamp>.log`. Tail with `tail -f` (or `Get-Content -Wait` on Windows), run `agentry status --target .`, or open `agentry gui --target .` for a per-role summary.
+
+Stop everything safely with:
+
+```powershell
+.\agentry\start.ps1 stop --target . --all
+```
+
+```bash
+./agentry/start.sh stop --target . --all
+```
 
 If `DISCORD_WEBHOOK_URL` is set in your `.env`, agent lifecycle events also go there (started / exited / stalled / timed-out), batched 60s.
 

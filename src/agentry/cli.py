@@ -9,6 +9,9 @@ Subcommands (v0.1):
   agentry doctor    [--target PATH]
   agentry start     [--target PATH]
   agentry status    [--target PATH]
+  agentry stop      [ROLE|--all] [--target PATH]
+  agentry configure [--target PATH] [--gui]
+  agentry gui       [--target PATH]
   agentry default-paths
 """
 
@@ -16,7 +19,6 @@ from __future__ import annotations
 
 import logging
 import os
-import shutil
 import signal
 import sys
 from pathlib import Path
@@ -34,10 +36,19 @@ from agentry.config import (
     target_env_file,
     target_logs_dir,
 )
+from agentry.configure import (
+    MODEL_PROFILES,
+    apply_recommended_options,
+    read_raw_config,
+    summarize_config,
+)
+from agentry.dashboard import run_dashboard
 from agentry.github import gh_available, list_labels, repo_exists
 from agentry.github import init_labels as gh_init_labels
 from agentry.notify import DiscordNotifier
-from agentry.orchestrator import Orchestrator
+from agentry.orchestrator import Orchestrator, _role_allowed_by_mode
+from agentry.session import active_session, list_sessions, stop_all_sessions, stop_session
+from agentry.supervisor import resolve_cli
 from agentry.version import __version__
 
 logger = logging.getLogger("agentry")
@@ -123,8 +134,12 @@ def doctor(target_path: Path, init_labels_flag: bool) -> None:
     for role, cfg in target_config.agents.items():
         if not cfg.enabled:
             continue
-        if shutil.which(cfg.cli):
-            click.secho(f"OK    role {role} cli {cfg.cli!r} found on PATH", fg="green")
+        resolved_cli = resolve_cli(cfg.cli)
+        if resolved_cli:
+            click.secho(
+                f"OK    role {role} cli {cfg.cli!r} found on PATH ({resolved_cli})",
+                fg="green",
+            )
         else:
             click.secho(
                 f"WARN  role {role} cli {cfg.cli!r} not on PATH; that role will fail to spawn",
@@ -247,10 +262,18 @@ def start(target_path: Path) -> None:
         except (ValueError, OSError):
             pass
 
+    active_count = sum(
+        1
+        for role, cfg in target_config.agents.items()
+        if cfg.enabled and _role_allowed_by_mode(target_config, role)
+    )
+    configured_count = sum(1 for cfg in target_config.agents.values() if cfg.enabled)
+    disabled_count = len(target_config.agents) - configured_count
+
     click.secho(
         f"agentry started for {target_config.target_repo} "
-        f"({sum(1 for cfg in target_config.agents.values() if cfg.enabled)} enabled roles, "
-        f"{sum(1 for cfg in target_config.agents.values() if not cfg.enabled)} disabled)\n"
+        f"({active_count} active roles, {configured_count} enabled in config, "
+        f"{disabled_count} disabled, mode={target_config.mode})\n"
         f"  target: {target_path}\n"
         f"  logs:   {target_logs_dir(target_path)}\n"
         "press Ctrl-C to stop.",
@@ -275,36 +298,240 @@ def start(target_path: Path) -> None:
     default=Path.cwd(),
 )
 def status(target_path: Path) -> None:
-    """Show recent orchestrator activity by reading log files."""
+    """Show sessions, run mode, and recent orchestrator activity."""
     target_path = target_path.resolve()
     target_config = load_target_config(target_path)
     log_root = target_logs_dir(target_path)
+    sessions = {record.get("role"): record for record in list_sessions(target_path)}
 
     click.echo(f"target:    {target_config.target_repo}")
     click.echo(f"path:      {target_path}")
     click.echo(f"logs:      {log_root}")
+    click.echo(f"mode:      {target_config.mode}")
+    click.echo(
+        "research:  "
+        f"allow_create_issues={target_config.research.allow_create_issues}, "
+        f"max_open_ready_for_design={target_config.research.max_open_ready_for_design}"
+    )
+    click.echo(
+        "automation:"
+        f" auto_merge={target_config.automation.auto_merge},"
+        f" stop_when_queue_empty={target_config.automation.stop_when_queue_empty}"
+    )
     enabled_count = sum(1 for cfg in target_config.agents.values() if cfg.enabled)
     disabled_count = len(target_config.agents) - enabled_count
     click.echo(f"roles ({enabled_count} enabled, {disabled_count} disabled):")
 
     for role in sorted(target_config.agents):
         cfg = target_config.agents[role]
+        allowed = _role_allowed_by_mode(target_config, role)
+        session = sessions.get(role)
+        session_state = _format_session_state(session)
         if not cfg.enabled:
-            click.secho(f"  {role}: disabled", fg="cyan")
+            click.secho(f"  {role}: disabled ({session_state})", fg="cyan")
+            continue
+        if not allowed:
+            click.secho(f"  {role}: blocked by mode ({session_state})", fg="cyan")
             continue
         role_logs = log_root / role
         if not role_logs.is_dir():
-            click.secho(f"  {role}: no log dir yet", fg="yellow")
+            click.secho(f"  {role}: no log dir yet ({session_state})", fg="yellow")
             continue
         all_logs = sorted(role_logs.glob("*.log"))
         if not all_logs:
-            click.secho(f"  {role}: no runs yet", fg="yellow")
+            click.secho(f"  {role}: no runs yet ({session_state})", fg="yellow")
             continue
         latest = all_logs[-3:]
-        click.echo(f"  {role}: {len(all_logs)} runs total")
+        click.echo(f"  {role}: {len(all_logs)} runs total ({session_state})")
         for p in latest:
             size = p.stat().st_size
             click.echo(f"    - {p.name} ({size} bytes)")
+
+
+def _format_session_state(session: dict | None) -> str:
+    if not session:
+        return "no session"
+    state = session.get("state") or "unknown"
+    pid = session.get("pid")
+    tokens = session.get("tokens_used")
+    budget = session.get("token_budget")
+    bits = [str(state)]
+    if pid:
+        bits.append(f"pid={pid}")
+    if tokens is not None or budget is not None:
+        bits.append(f"tokens={tokens or 0}/{budget or '?'}")
+    if session.get("budget_exceeded"):
+        bits.append("budget-exceeded")
+    return ", ".join(bits)
+
+
+# -----------------------------------------------------------------------------
+# stop
+# -----------------------------------------------------------------------------
+
+
+@cli.command()
+@click.option(
+    "--target",
+    "target_path",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    default=Path.cwd(),
+)
+@click.option("--all", "all_roles", is_flag=True, help="Stop all recorded role sessions.")
+@click.argument("role", required=False)
+def stop(target_path: Path, all_roles: bool, role: str | None) -> None:
+    """Stop a role subprocess recorded in agentry/state/sessions."""
+    target_path = target_path.resolve()
+    if all_roles:
+        results = stop_all_sessions(target_path)
+        if not results:
+            click.secho("no sessions found", fg="yellow")
+            return
+        for name, stopped in sorted(results.items()):
+            color = "green" if stopped else "yellow"
+            click.secho(f"{name}: {'stop signal sent' if stopped else 'marked stopped'}", fg=color)
+        return
+
+    if not role:
+        raise click.UsageError("pass a ROLE or --all")
+
+    if active_session(target_path, role) is None:
+        click.secho(f"{role}: no active session; marking stopped if state exists", fg="yellow")
+    stopped = stop_session(target_path, role)
+    click.secho(f"{role}: {'stop signal sent' if stopped else 'marked stopped'}", fg="green")
+
+
+# -----------------------------------------------------------------------------
+# configure / gui
+# -----------------------------------------------------------------------------
+
+
+@cli.command("configure")
+@click.option(
+    "--target",
+    "target_path",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    default=Path.cwd(),
+)
+@click.option("--gui", "open_gui", is_flag=True, help="Run the local web dashboard.")
+@click.option("--host", default="127.0.0.1", show_default=True)
+@click.option("--port", default=4783, show_default=True, type=int)
+@click.option("--defaults", "use_defaults", is_flag=True, help="Apply recommended defaults.")
+@click.option("--mode", type=click.Choice(["manual", "pipeline", "autonomous"]))
+@click.option("--model-profile", type=click.Choice(sorted(MODEL_PROFILES)))
+@click.option("--enable-researcher/--disable-researcher", default=None)
+@click.option("--enable-release/--disable-release", default=None)
+@click.option("--auto-merge/--no-auto-merge", default=None)
+@click.option("--stop-when-queue-empty/--keep-waiting", default=None)
+def configure_cmd(
+    target_path: Path,
+    open_gui: bool,
+    host: str,
+    port: int,
+    use_defaults: bool,
+    mode: str | None,
+    model_profile: str | None,
+    enable_researcher: bool | None,
+    enable_release: bool | None,
+    auto_merge: bool | None,
+    stop_when_queue_empty: bool | None,
+) -> None:
+    """Configure run mode, role switches, and recommended model tiers."""
+    target_path = target_path.resolve()
+    if open_gui:
+        run_dashboard(target_path, host=host, port=port)
+        return
+
+    raw = read_raw_config(target_path)
+    current = summarize_config(raw)
+
+    if not use_defaults and _no_config_options(
+        mode,
+        model_profile,
+        enable_researcher,
+        enable_release,
+        auto_merge,
+        stop_when_queue_empty,
+    ):
+        selected_mode = click.prompt(
+            "Run mode",
+            default=str(current.get("mode") or "pipeline"),
+            type=click.Choice(["manual", "pipeline", "autonomous"]),
+        )
+        selected_profile = click.prompt(
+            "Model profile",
+            default="balanced",
+            type=click.Choice(sorted(MODEL_PROFILES)),
+        )
+        current_roles = current.get("roles") if isinstance(current.get("roles"), dict) else {}
+        researcher_now = bool(
+            current_roles.get("researcher", {}).get("enabled")
+            if isinstance(current_roles.get("researcher"), dict)
+            else False
+        )
+        release_now = bool(
+            current_roles.get("release", {}).get("enabled")
+            if isinstance(current_roles.get("release"), dict)
+            else False
+        )
+        automation = (
+            current.get("automation") if isinstance(current.get("automation"), dict) else {}
+        )
+        selected_researcher = click.confirm("Enable Researcher", default=researcher_now)
+        selected_release = click.confirm("Enable Release Engineer", default=release_now)
+        selected_auto_merge = click.confirm(
+            "Auto-merge agent-approved PRs",
+            default=bool(automation.get("auto_merge", False)),
+        )
+        selected_stop_empty = click.confirm(
+            "Stop when queue is empty",
+            default=bool(automation.get("stop_when_queue_empty", False)),
+        )
+    else:
+        selected_mode = mode or "pipeline"
+        selected_profile = model_profile or "balanced"
+        selected_researcher = bool(enable_researcher) if enable_researcher is not None else False
+        selected_release = bool(enable_release) if enable_release is not None else False
+        selected_auto_merge = bool(auto_merge) if auto_merge is not None else False
+        selected_stop_empty = (
+            bool(stop_when_queue_empty) if stop_when_queue_empty is not None else False
+        )
+
+    updated = apply_recommended_options(
+        target_path,
+        mode=selected_mode,
+        enable_researcher=selected_researcher,
+        enable_release=selected_release,
+        model_profile=selected_profile,
+        auto_merge=selected_auto_merge,
+        stop_when_queue_empty=selected_stop_empty,
+    )
+    summary = summarize_config(updated)
+    click.secho(f"updated {target_config_file(target_path)}", fg="green")
+    click.echo(f"mode: {summary['mode']}")
+    for role, info in summary["roles"].items():
+        click.echo(
+            f"  {role}: enabled={info['enabled']} "
+            f"model={info['model'] or '?'} budget={info['token_budget'] or '?'}"
+        )
+
+
+@cli.command()
+@click.option(
+    "--target",
+    "target_path",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    default=Path.cwd(),
+)
+@click.option("--host", default="127.0.0.1", show_default=True)
+@click.option("--port", default=4783, show_default=True, type=int)
+def gui(target_path: Path, host: str, port: int) -> None:
+    """Run the local Agentry status/configuration dashboard."""
+    run_dashboard(target_path.resolve(), host=host, port=port)
+
+
+def _no_config_options(*values: object) -> bool:
+    return all(value is None for value in values)
 
 
 # -----------------------------------------------------------------------------

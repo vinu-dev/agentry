@@ -32,6 +32,14 @@ from agentry.config import AgentConfig, TargetConfig, target_logs_dir, target_wo
 from agentry.github import has_open_issue_with_label, has_open_pr_with_label
 from agentry.notify import DiscordNotifier, Event
 from agentry.prompt import build_role_prompt
+from agentry.session import (
+    active_session,
+    begin_session,
+    finish_session,
+    parse_tokens_used,
+    update_session,
+    utc_now,
+)
 from agentry.supervisor import ExitReason, supervise
 
 logger = logging.getLogger(__name__)
@@ -61,16 +69,20 @@ class Orchestrator:
 
     def start(self) -> None:
         enabled_agents = {
-            role: cfg for role, cfg in self.target_config.agents.items() if cfg.enabled
+            role: cfg
+            for role, cfg in self.target_config.agents.items()
+            if cfg.enabled and _role_allowed_by_mode(self.target_config, role)
         }
         all_roles = sorted(enabled_agents.keys())
         disabled_roles = sorted(
-            role for role, cfg in self.target_config.agents.items() if not cfg.enabled
+            role
+            for role, cfg in self.target_config.agents.items()
+            if not cfg.enabled or not _role_allowed_by_mode(self.target_config, role)
         )
         for role in disabled_roles:
-            logger.info("role %s disabled; not starting thread", role)
+            logger.info("role %s disabled or blocked by mode; not starting thread", role)
         for role, cfg in self.target_config.agents.items():
-            if not cfg.enabled:
+            if role not in enabled_agents:
                 continue
             t = threading.Thread(
                 target=self._role_loop_with_recovery,
@@ -149,6 +161,16 @@ class Orchestrator:
                 return
 
         while not self.shutdown_event.is_set():
+            existing = active_session(self.target_path, role)
+            if existing is not None:
+                logger.info("role %s skipped: existing running session", role)
+                self.notifier.emit(
+                    Event(role=role, kind="session-active", message="existing session running")
+                )
+                if self.shutdown_event.wait(timeout=cfg.interval_min * 60):
+                    return
+                continue
+
             if not _role_has_work(self.target_config, cfg):
                 message = _no_work_message(cfg)
                 logger.info("role %s skipped: %s", role, message)
@@ -170,6 +192,25 @@ class Orchestrator:
 
             log_path = log_dir / f"{int(time.time())}.log"
             self.notifier.emit(Event(role=role, kind="started", message=f"cli={cfg.cli}"))
+            begin_session(
+                self.target_path,
+                role=role,
+                log_path=log_path,
+                token_budget=cfg.token_budget,
+                mode=self.target_config.mode,
+            )
+            last_session_touch = 0.0
+
+            def on_spawn(pid: int) -> None:
+                update_session(self.target_path, role, pid=pid)
+
+            def on_output() -> None:
+                nonlocal last_session_touch
+                now = time.monotonic()
+                if now - last_session_touch < 5:
+                    return
+                last_session_touch = now
+                update_session(self.target_path, role, last_output_at=utc_now())
 
             run = supervise(
                 cli=cfg.cli,
@@ -181,9 +222,33 @@ class Orchestrator:
                 log_path=log_path,
                 shutdown_event=self.shutdown_event,
                 stdin_input=prompt,
+                checkin_response_seconds=cfg.checkin_response_seconds,
+                on_spawn=on_spawn,
+                on_output=on_output,
+            )
+            tokens_used = parse_tokens_used(log_path)
+            finish_session(
+                self.target_path,
+                role,
+                run,
+                tokens_used=tokens_used,
+                token_budget=cfg.token_budget,
             )
 
             self._emit_outcome(role, run)
+            if (
+                tokens_used is not None
+                and cfg.token_budget is not None
+                and tokens_used > cfg.token_budget
+            ):
+                self.notifier.emit(
+                    Event(
+                        role=role,
+                        kind="token-budget-exceeded",
+                        message=f"used {tokens_used} tokens > budget {cfg.token_budget}",
+                        critical=False,
+                    )
+                )
 
             if run.reason == ExitReason.INTERRUPTED:
                 return
@@ -213,6 +278,8 @@ class Orchestrator:
             ExitReason.TIMED_OUT: "timed-out",
             ExitReason.INTERRUPTED: "interrupted",
             ExitReason.SPAWN_FAILED: "spawn-failed",
+            ExitReason.REPORTED_DONE: "reported-done",
+            ExitReason.REPORTED_BLOCKED: "reported-blocked",
         }
         critical = run.reason in {ExitReason.STALLED, ExitReason.TIMED_OUT, ExitReason.SPAWN_FAILED}
 
@@ -324,6 +391,18 @@ def _role_has_work(target_config: TargetConfig, cfg: AgentConfig) -> bool:
         if has_open_pr_with_label(target_config.target_repo, label):
             return True
     return False
+
+
+def _role_allowed_by_mode(target_config: TargetConfig, role: str) -> bool:
+    """Apply operator run-mode controls before any LLM process is launched."""
+    if target_config.mode == "manual":
+        return False
+    if role == "researcher":
+        return (
+            target_config.mode == "autonomous"
+            and target_config.research.allow_create_issues
+        )
+    return True
 
 
 def _no_work_message(cfg: AgentConfig) -> str:

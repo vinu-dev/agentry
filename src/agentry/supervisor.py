@@ -43,6 +43,7 @@ import subprocess
 import sys
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
 from io import IOBase
@@ -73,6 +74,7 @@ class SupervisedRun:
     duration_seconds: float
     stdout_path: Path | None  # File where stdout was tee'd (None on spawn failure)
     error_detail: str | None = None  # Free-form text for SPAWN_FAILED, etc.
+    pid: int | None = None
 
 
 # -----------------------------------------------------------------------------
@@ -93,6 +95,8 @@ def supervise(
     stdin_input: str | None = None,
     checkin_response_seconds: float = 90.0,
     max_extensions: int = 6,
+    on_spawn: Callable[[int], None] | None = None,
+    on_output: Callable[[], None] | None = None,
 ) -> SupervisedRun:
     """Spawn ``cli args`` and watch it.
 
@@ -135,6 +139,8 @@ def supervise(
             stdin_input=stdin_input,
             checkin_response_seconds=checkin_response_seconds,
             max_extensions=max_extensions,
+            on_spawn=on_spawn,
+            on_output=on_output,
         )
     return _supervise_legacy(
         cli=cli,
@@ -146,6 +152,8 @@ def supervise(
         log_path=log_path,
         shutdown_event=shutdown_event,
         stdin_input=stdin_input,
+        on_spawn=on_spawn,
+        on_output=on_output,
     )
 
 
@@ -165,6 +173,8 @@ def _supervise_legacy(
     log_path: Path,
     shutdown_event: threading.Event | None,
     stdin_input: str | None,
+    on_spawn: Callable[[int], None] | None,
+    on_output: Callable[[], None] | None,
 ) -> SupervisedRun:
     """Legacy path: write stdin_input once, kill on stall/total."""
     start = time.monotonic()
@@ -184,6 +194,8 @@ def _supervise_legacy(
                 stdout_path=log_path,
                 error_detail=f"could not spawn {cli!r}: {e}",
             )
+        if on_spawn is not None:
+            on_spawn(proc.pid)
 
         if stdin_input is not None:
             try:
@@ -208,6 +220,8 @@ def _supervise_legacy(
                         last_output_at = time.monotonic()
                     if log_file is not None and not log_file.closed:
                         log_file.write(line)
+                    if on_output is not None:
+                        on_output()
             except (ValueError, OSError):
                 pass
 
@@ -224,6 +238,7 @@ def _supervise_legacy(
                     exit_code=ret,
                     duration_seconds=duration,
                     stdout_path=log_path,
+                    pid=proc.pid,
                 )
 
             if shutdown_event is not None and shutdown_event.is_set():
@@ -234,6 +249,7 @@ def _supervise_legacy(
                     exit_code=proc.returncode,
                     duration_seconds=time.monotonic() - start,
                     stdout_path=log_path,
+                    pid=proc.pid,
                 )
 
             now = time.monotonic()
@@ -245,6 +261,7 @@ def _supervise_legacy(
                     exit_code=proc.returncode,
                     duration_seconds=now - start,
                     stdout_path=log_path,
+                    pid=proc.pid,
                 )
 
             with last_output_lock:
@@ -257,6 +274,7 @@ def _supervise_legacy(
                     exit_code=proc.returncode,
                     duration_seconds=now - start,
                     stdout_path=log_path,
+                    pid=proc.pid,
                 )
 
             time.sleep(1.0)
@@ -305,6 +323,8 @@ def _supervise_streamjson(
     stdin_input: str | None,
     checkin_response_seconds: float,
     max_extensions: int,
+    on_spawn: Callable[[int], None] | None,
+    on_output: Callable[[], None] | None,
 ) -> SupervisedRun:
     """Stream-JSON path: bidirectional protocol, check-in instead of kill."""
     start = time.monotonic()
@@ -329,6 +349,8 @@ def _supervise_streamjson(
                 stdout_path=log_path,
                 error_detail=f"could not spawn {cli!r}: {e}",
             )
+        if on_spawn is not None:
+            on_spawn(proc.pid)
 
         # Send the initial prompt as a JSON user message (replaces the legacy
         # one-shot stdin write).
@@ -359,6 +381,8 @@ def _supervise_streamjson(
                         last_event_at = time.monotonic()
                     if log_file is not None and not log_file.closed:
                         log_file.write(line)
+                    if on_output is not None:
+                        on_output()
                     text = _extract_text_from_event(line)
                     if text:
                         with text_buffer_lock:
@@ -384,6 +408,7 @@ def _supervise_streamjson(
                     exit_code=ret,
                     duration_seconds=time.monotonic() - start,
                     stdout_path=log_path,
+                    pid=proc.pid,
                 )
 
             # External shutdown.
@@ -395,6 +420,7 @@ def _supervise_streamjson(
                     exit_code=proc.returncode,
                     duration_seconds=time.monotonic() - start,
                     stdout_path=log_path,
+                    pid=proc.pid,
                 )
 
             now = time.monotonic()
@@ -424,6 +450,7 @@ def _supervise_streamjson(
                         exit_code=proc.returncode,
                         duration_seconds=time.monotonic() - start,
                         stdout_path=log_path,
+                        pid=proc.pid,
                     )
 
                 log_file.write(
@@ -477,6 +504,7 @@ def _supervise_streamjson(
                             exit_code=proc.returncode,
                             duration_seconds=time.monotonic() - start,
                             stdout_path=log_path,
+                            pid=proc.pid,
                         )
                     log_file.write("--- DONE but no exit in 60s; killing ---\n")
                     _kill_tree(proc)
@@ -486,6 +514,7 @@ def _supervise_streamjson(
                         exit_code=proc.returncode,
                         duration_seconds=time.monotonic() - start,
                         stdout_path=log_path,
+                        pid=proc.pid,
                     )
 
                 if action == "BLOCKED":
@@ -501,6 +530,7 @@ def _supervise_streamjson(
                             duration_seconds=time.monotonic() - start,
                             stdout_path=log_path,
                             error_detail=str(detail) if detail else None,
+                            pid=proc.pid,
                         )
                     _kill_tree(proc)
                     reader_thread.join(timeout=2.0)
@@ -510,6 +540,7 @@ def _supervise_streamjson(
                         duration_seconds=time.monotonic() - start,
                         stdout_path=log_path,
                         error_detail=str(detail) if detail else None,
+                        pid=proc.pid,
                     )
 
                 # action == "NORESPONSE": no STATUS line within timeout. The
@@ -527,6 +558,7 @@ def _supervise_streamjson(
                     exit_code=proc.returncode,
                     duration_seconds=time.monotonic() - start,
                     stdout_path=log_path,
+                    pid=proc.pid,
                 )
 
             time.sleep(1.0)
@@ -684,6 +716,30 @@ def _wait_exit(proc: subprocess.Popen[str], *, timeout: float) -> bool:
 # -----------------------------------------------------------------------------
 
 
+def resolve_cli(cli: str) -> str | None:
+    """Return an executable path for ``cli`` with npm shim fallbacks.
+
+    Target configs are often copied between Windows and Linux. Windows npm
+    shims are usually ``*.cmd`` while POSIX shims are extensionless, so accept
+    either form and resolve to what exists on the current host.
+    """
+    direct = shutil.which(cli)
+    if direct:
+        return direct
+    path = Path(cli)
+    if path.suffix.lower() in {".cmd", ".bat", ".ps1"}:
+        without_suffix = str(path.with_suffix(""))
+        direct = shutil.which(without_suffix)
+        if direct:
+            return direct
+    if sys.platform == "win32" and path.suffix == "":
+        for suffix in (".cmd", ".bat", ".exe"):
+            direct = shutil.which(f"{cli}{suffix}")
+            if direct:
+                return direct
+    return None
+
+
 def _spawn(
     *,
     cli: str,
@@ -730,11 +786,9 @@ def _spawn(
     else:
         popen_kwargs["start_new_session"] = True  # detach from caller's process group
 
-    # Resolve cli via PATH so Windows finds .cmd / .bat wrappers (npm puts
-    # claude.cmd / codex.cmd on PATH, but Python's Popen won't auto-append
-    # .cmd to a bare 'claude'). On POSIX this is a no-op when cli is already
-    # an absolute path or has been resolved.
-    resolved_cli = shutil.which(cli) or cli
+    # Resolve cli via PATH so Windows finds .cmd / .bat wrappers and POSIX
+    # can tolerate configs copied from Windows that say npx.cmd.
+    resolved_cli = resolve_cli(cli) or cli
 
     proc: subprocess.Popen[str] = subprocess.Popen(  # type: ignore[call-overload]
         [resolved_cli, *args], **popen_kwargs
@@ -794,4 +848,4 @@ def _kill_tree(proc: subprocess.Popen[str]) -> None:
                     pass
 
 
-__all__ = ["ExitReason", "SupervisedRun", "supervise"]
+__all__ = ["ExitReason", "SupervisedRun", "resolve_cli", "supervise"]

@@ -151,7 +151,7 @@ Write-Host @"
 Next:
 
   1. Edit agentry\config.yml — pick which model handles each role
-     (current defaults: claude for everything except implementer = codex)
+     (current defaults: optimized Codex model tiers)
 
   2. Copy your secrets in:
 
@@ -161,7 +161,11 @@ Next:
   3. (Optional) Edit docs\ai\roles\*.md with project-specific instructions
      for each role. The bundled skeletons work as-is.
 
-  4. Run agentry:
+  4. Configure or inspect without starting agents:
+
+         .\agentry\start.ps1 gui --target .
+
+  5. Run agentry:
 
          .\agentry\start.ps1              # foreground; Ctrl-C to stop
 
