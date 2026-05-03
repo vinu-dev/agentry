@@ -49,12 +49,15 @@ class TestMakePrompt:
         with pytest.raises(ValueError, match="all_roles"):
             make_prompt("architect", [])
 
-    def test_template_includes_loop_structure(self):
-        """The generic prompt must include the loop instructions (find/take/do/move/repeat)."""
+    def test_template_includes_one_item_loop_structure(self):
+        """The generic prompt must include the single-item loop instructions."""
         out = make_prompt("architect", ["architect", "implementer"])
         assert "Find work items" in out
         assert "exit immediately with code 0" in out
-        assert "Repeat from step 1" in out
+        assert "process exactly one selected work item" in out
+        assert "Do not inspect, design, implement, test, review, or relabel the next item" in out
+        assert "Do not repeat from step 1" in out
+        assert "as many items as you can" not in out
 
     def test_template_mentions_parallelism(self):
         out = make_prompt("architect", ["architect", "implementer"])
