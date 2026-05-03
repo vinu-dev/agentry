@@ -30,6 +30,13 @@
 #   trigger.pr_labels    -> run only when a matching open PR exists
 # Roles with run_on_start: false sleep their first interval before the first
 # run, which prevents scheduled discovery roles from firing on every reboot.
+#
+# The default model tiering keeps cost down while preserving judgment where
+# defects are expensive:
+#   - gpt-5.4-mini: researcher, tester, release smoke checks
+#   - gpt-5.4: architect, implementer, reviewer
+# Swap the cli/args per role for Claude, local Llama/Ollama, or wrappers if a
+# target repo needs a different provider.
 
 target_repo: <owner>/<repo>           # filled in by add-to-target per repo
 isolate_worktrees: true              # one git worktree per role for safe parallelism
@@ -37,8 +44,8 @@ isolate_worktrees: true              # one git worktree per role for safe parall
 agents:
 
   researcher:
-    cli: claude
-    args: ["-p", "--input-format=stream-json", "--output-format=stream-json", "--verbose", "--dangerously-skip-permissions"]
+    cli: npx.cmd                      # npx on POSIX shells
+    args: ["--yes", "@openai/codex", "exec", "-m", "gpt-5.4-mini", "--dangerously-bypass-approvals-and-sandbox"]
     # Research is intentionally scheduled, not startup-triggered: it is the
     # highest-token role and should not run every time the host reboots.
     run_on_start: false
@@ -130,8 +137,8 @@ agents:
       If that file is missing, exit with error.
 
   architect:
-    cli: claude
-    args: ["-p", "--input-format=stream-json", "--output-format=stream-json", "--verbose", "--dangerously-skip-permissions"]
+    cli: npx.cmd                      # npx on POSIX shells
+    args: ["--yes", "@openai/codex", "exec", "-m", "gpt-5.4", "--dangerously-bypass-approvals-and-sandbox"]
     trigger:
       issue_labels: ["ready-for-design"]
     interval_min: 5
@@ -226,8 +233,8 @@ agents:
       If that file is missing, exit with error.
 
   implementer:
-    cli: claude                       # claude.cmd on Windows
-    args: ["-p", "--input-format=stream-json", "--output-format=stream-json", "--verbose", "--dangerously-skip-permissions"]
+    cli: npx.cmd                      # npx on POSIX shells
+    args: ["--yes", "@openai/codex", "exec", "-m", "gpt-5.4", "--dangerously-bypass-approvals-and-sandbox"]
     trigger:
       issue_labels: ["ready-for-implementation", "tests-failed"]
     interval_min: 5
@@ -318,8 +325,8 @@ agents:
       If that file is missing, exit with error.
 
   tester:
-    cli: claude
-    args: ["-p", "--input-format=stream-json", "--output-format=stream-json", "--verbose", "--dangerously-skip-permissions"]
+    cli: npx.cmd                      # npx on POSIX shells
+    args: ["--yes", "@openai/codex", "exec", "-m", "gpt-5.4-mini", "--dangerously-bypass-approvals-and-sandbox"]
     trigger:
       issue_labels: ["ready-for-test"]
     interval_min: 5
@@ -404,8 +411,8 @@ agents:
       If that file is missing, exit with error.
 
   reviewer:
-    cli: claude
-    args: ["-p", "--input-format=stream-json", "--output-format=stream-json", "--verbose", "--dangerously-skip-permissions"]
+    cli: npx.cmd                      # npx on POSIX shells
+    args: ["--yes", "@openai/codex", "exec", "-m", "gpt-5.4", "--dangerously-bypass-approvals-and-sandbox"]
     trigger:
       pr_labels: ["ready-for-review"]
     interval_min: 5
@@ -492,8 +499,8 @@ agents:
       If that file is missing, exit with error.
 
   release:
-    cli: claude
-    args: ["-p", "--input-format=stream-json", "--output-format=stream-json", "--verbose", "--dangerously-skip-permissions"]
+    cli: npx.cmd                      # npx on POSIX shells
+    args: ["--yes", "@openai/codex", "exec", "-m", "gpt-5.4-mini", "--dangerously-bypass-approvals-and-sandbox"]
     trigger:
       issue_labels: ["release-approved"]
     interval_min: 1440
