@@ -63,7 +63,7 @@ agents:
 
   implementer:
     cli: codex                # ← coding = codex by default; change to claude if you prefer
-    args: ["--auto-approve"]
+    args: ["exec", "--dangerously-bypass-approvals-and-sandbox"]
     interval_min: 5
     total_min: 60
     stall_min: 10

@@ -80,7 +80,7 @@ agents:
 
   implementer:
     cli: codex
-    args: ["--auto-approve"]
+    args: ["exec", "--dangerously-bypass-approvals-and-sandbox"]
     interval_min: 5
     total_min: 90              # implementation may require unit verification records per IEC 62304 §5.5.5
     stall_min: 10

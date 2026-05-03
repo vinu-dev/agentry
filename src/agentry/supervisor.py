@@ -26,6 +26,7 @@ Corner cases NOT handled here (deferred):
 from __future__ import annotations
 
 import os
+import shutil
 import signal
 import subprocess
 import sys
@@ -236,8 +237,14 @@ def _spawn(
     else:
         popen_kwargs["start_new_session"] = True  # detach from caller's process group
 
+    # Resolve cli via PATH so Windows finds .cmd / .bat wrappers (npm puts
+    # claude.cmd / codex.cmd on PATH, but Python's Popen won't auto-append
+    # .cmd to a bare 'claude'). On POSIX this is a no-op when cli is already
+    # an absolute path or has been resolved.
+    resolved_cli = shutil.which(cli) or cli
+
     proc: subprocess.Popen[str] = subprocess.Popen(  # type: ignore[call-overload]
-        [cli, *args], **popen_kwargs
+        [resolved_cli, *args], **popen_kwargs
     )
 
     if stdin_input is not None:

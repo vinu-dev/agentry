@@ -60,7 +60,7 @@ agents:
 
   implementer:
     cli: codex                        # or claude — operator's choice
-    args: ["--auto-approve"]
+    args: ["exec", "--dangerously-bypass-approvals-and-sandbox"]
     interval_min: 5
     total_min: 60
     stall_min: 10
