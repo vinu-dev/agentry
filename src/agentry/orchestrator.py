@@ -31,7 +31,7 @@ from pathlib import Path
 from agentry.config import AgentConfig, TargetConfig, target_logs_dir, target_worktrees_dir
 from agentry.github import has_open_issue_with_label, has_open_pr_with_label
 from agentry.notify import DiscordNotifier, Event
-from agentry.prompt import make_prompt
+from agentry.prompt import build_role_prompt
 from agentry.supervisor import ExitReason, supervise
 
 logger = logging.getLogger(__name__)
@@ -132,7 +132,7 @@ class Orchestrator:
                     return
 
     def _role_loop(self, role: str, cfg: AgentConfig, all_roles: list[str]) -> None:
-        prompt = cfg.prompt if cfg.prompt else make_prompt(role, all_roles)
+        prompt = build_role_prompt(role, all_roles, cfg.prompt)
         log_dir = target_logs_dir(self.target_path) / role
         log_dir.mkdir(parents=True, exist_ok=True)
 

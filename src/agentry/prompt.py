@@ -10,6 +10,25 @@ This is the entire role-prompt contract for v0.1. Keep it short and stable —
 changes here affect every role in every target.
 """
 
+RUNTIME_CONTRACT = """\
+## Agentry Runtime Contract
+
+- Use the shell and the target repo's `gh` CLI for all GitHub reads and
+  writebacks (`gh issue`, `gh pr`, `gh label`, etc.).
+- Do not use GitHub app connectors, MCP GitHub tools, browser automation, or
+  hidden integrations for GitHub writes. They may not have the same repository
+  permissions as the operator's `gh` auth.
+- After every label, comment, PR, or review writeback, verify the result with
+  `gh issue view`, `gh pr view`, or `gh pr list`.
+- If a formal `gh pr review` write fails, immediately fall back to `gh pr
+  comment` with the same review outcome and then update labels with `gh pr edit`
+  / `gh issue edit`.
+- Never leave an item in the same trigger label after a completed cycle. Move it
+  forward, move it back to a retry label, or mark it blocked with a comment that
+  explains the next human or agent action.
+"""
+
+
 GENERIC_PROMPT_TEMPLATE = """\
 You are the {role_name} in an autonomous software development pipeline.
 
@@ -65,3 +84,18 @@ def make_prompt(role_name: str, all_roles: list[str]) -> str:
         role_name=role_name,
         other_roles=other_roles,
     )
+
+
+def build_role_prompt(
+    role_name: str,
+    all_roles: list[str],
+    configured_prompt: str | None = None,
+) -> str:
+    """Build the final prompt sent to a role process.
+
+    The runtime contract is injected even when a target provides a custom
+    prompt. That keeps critical operational behavior (especially GitHub
+    writeback semantics) consistent across targets and model providers.
+    """
+    base = configured_prompt if configured_prompt is not None else make_prompt(role_name, all_roles)
+    return f"{RUNTIME_CONTRACT.strip()}\n\n{base.strip()}\n"

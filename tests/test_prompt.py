@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from agentry.prompt import GENERIC_PROMPT_TEMPLATE, make_prompt
+from agentry.prompt import GENERIC_PROMPT_TEMPLATE, RUNTIME_CONTRACT, build_role_prompt, make_prompt
 
 
 class TestMakePrompt:
@@ -61,3 +61,13 @@ class TestMakePrompt:
         assert "{role_name}" in GENERIC_PROMPT_TEMPLATE
         assert "{other_roles}" in GENERIC_PROMPT_TEMPLATE
         assert "docs/ai/roles/{role_name}.md" in GENERIC_PROMPT_TEMPLATE
+
+    def test_runtime_contract_requires_gh_cli_writebacks(self):
+        assert "gh` CLI" in RUNTIME_CONTRACT
+        assert "Do not use GitHub app connectors" in RUNTIME_CONTRACT
+
+    def test_build_role_prompt_wraps_custom_prompt(self):
+        out = build_role_prompt("reviewer", ["reviewer"], "CUSTOM ROLE BODY")
+        assert "Agentry Runtime Contract" in out
+        assert "CUSTOM ROLE BODY" in out
+        assert "GitHub app connectors" in out

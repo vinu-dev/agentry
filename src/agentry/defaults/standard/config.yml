@@ -236,7 +236,7 @@ agents:
     cli: npx.cmd                      # npx on POSIX shells
     args: ["--yes", "@openai/codex", "exec", "-m", "gpt-5.4", "--dangerously-bypass-approvals-and-sandbox"]
     trigger:
-      issue_labels: ["ready-for-implementation", "tests-failed"]
+      issue_labels: ["changes-requested", "tests-failed", "ready-for-implementation"]
     interval_min: 5
     total_min: 60
     stall_min: 60        # = total_min
@@ -246,18 +246,23 @@ agents:
 
       ## Workflow (universal)
 
-      INPUT: Issues labeled `ready-for-implementation` or `tests-failed`
-      (oldest first; tests-failed takes priority).
+      INPUT: Issues labeled `changes-requested`, `tests-failed`, or
+      `ready-for-implementation` (oldest first; changes-requested and
+      tests-failed take priority).
 
       STEPS:
       1. Read agentry/state/sessions/implementer/latest.md if it exists.
       2. Pick the oldest:
+           gh issue list --label changes-requested --state open --json number,title --jq 'sort_by(.number)[0]'
            gh issue list --label tests-failed --state open --json number,title --jq 'sort_by(.number)[0]'
            gh issue list --label ready-for-implementation --state open --json number,title --jq 'sort_by(.number)[0]'
-         Tests-failed first if both have items. Exit 0 if neither.
-      3. If tests-failed: read the failure from the issue + the relevant
-         agentry/logs/issues/<id>-<slug>/tester.log entry so you know what
-         to fix.
+         Changes-requested first, then tests-failed, then ready-for-implementation.
+         Exit 0 if none exist.
+      3. If changes-requested: read the PR review/comment findings and the
+         relevant agentry/logs/issues/<id>-<slug>/reviewer.log entry. If
+         tests-failed: read the failure from the issue + the relevant
+         agentry/logs/issues/<id>-<slug>/tester.log entry. Use that context
+         to fix only the requested scope.
       4. Switch to the shared feature branch and rebase:
            slug=<from spec filename>
            git fetch origin
@@ -276,7 +281,9 @@ agents:
            git commit -m "[<id>] impl: <one-line>"
            git push origin "feature/<id>-${slug}" --force-with-lease
       9. Move label + comment:
-           if tests-failed:
+           if changes-requested:
+             gh issue edit <id> --add-label ready-for-test --remove-label changes-requested
+           elif tests-failed:
              gh issue edit <id> --add-label ready-for-test --remove-label tests-failed
            else:
              gh issue edit <id> --add-label ready-for-test --remove-label ready-for-implementation
@@ -454,10 +461,18 @@ agents:
       6. APPROVE:
            gh pr review <n> --approve --body "<concise summary>"
            gh pr edit <n> --remove-label ready-for-review
+         If `gh pr review` fails, use `gh pr comment <n> --body "<APPROVED:
+         ...>"` and still remove `ready-for-review`. Verify with `gh pr view`.
          (Do NOT click merge — code-owner human merges.)
          BLOCK (any item failed):
            gh pr review <n> --request-changes --body "<itemized issues>"
            gh pr edit <n> --add-label blocked --remove-label ready-for-review
+           gh issue edit <id> --add-label changes-requested --remove-label ready-for-test
+           gh issue comment <id> --body "<short review-fix summary and PR link>"
+         If `gh pr review` fails, use `gh pr comment <n> --body "<REQUEST
+         CHANGES: ...>"`, then perform the same PR and issue label updates.
+         Verify the PR no longer has `ready-for-review` and the issue has
+         `changes-requested`.
       7. Append distilled cycle entry to
          agentry/logs/issues/<id>-<slug>/reviewer.log
       8. Overwrite session summary. Exit 0.
