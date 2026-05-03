@@ -1,5 +1,7 @@
 # Agentry
 
+![Agentry automates multi-agent AI development workflows](docs/assets/agentry-linkedin-concept.png)
+
 Status: **v0.1 (alpha) — running, not yet validated against real targets**
 
 Agentry is an autonomous multi-agent product organization. It runs continuously against a target GitHub repository and ships features through a pipeline of specialized roles — Researcher, Architect, Implementer, Tester, Reviewer, Release Engineer — each backed by an LLM CLI of your choice (Claude Code, OpenAI Codex CLI, or any wrapper script you can put on PATH).
