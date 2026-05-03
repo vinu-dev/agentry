@@ -150,6 +150,11 @@ class TestBundledDefaults:
             p = bundled_default_role_path(role)
             assert p.is_file(), f"bundled rule file missing for {role} at {p}"
 
+    def test_bundled_reviewer_documents_agent_approval_fallback(self):
+        text = bundled_default_role_path("reviewer").read_text(encoding="utf-8")
+        assert "agent-approved" in text
+        assert "GitHub refuses self-review" in text
+
     def test_role_rule_path_falls_back_to_bundled(self, tmp_path: Path):
         path = role_rule_path(tmp_path, "architect")
         # tmp_path has no docs/ai/roles/, so fallback kicks in.

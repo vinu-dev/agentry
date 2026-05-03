@@ -371,7 +371,8 @@ agents:
                --title "[<id>] <title>" --body "<see template in tester.md>"
              pr=$(gh pr list --head "feature/<id>-${slug}" --state open --json number --jq '.[0].number')
            fi
-           gh pr edit <pr> --add-label ready-for-review --remove-label blocked
+           gh label create agent-approved --color 0e8a16 --force
+           gh pr edit <pr> --add-label ready-for-review --remove-label blocked --remove-label agent-approved
            gh issue edit <id> --remove-label ready-for-test
            gh issue comment <id> --body "Tests passed; PR #<pr> opened."
          ANY RED:
@@ -463,20 +464,25 @@ agents:
          - traceability
          - repo policy compliance
       6. APPROVE:
-           gh pr review <n> --approve --body "<concise summary>"
-           gh pr edit <n> --remove-label ready-for-review --remove-label blocked
-         If `gh pr review` fails, use `gh pr comment <n> --body "<APPROVED:
-         ...>"` and still remove `ready-for-review` and `blocked`. Verify with `gh pr view`.
+           gh label create agent-approved --color 0e8a16 --force
+           gh pr review <n> --approve --body "Agentry review outcome: APPROVED\n\n<concise summary>"
+           gh pr edit <n> --add-label agent-approved --remove-label ready-for-review --remove-label blocked
+         If `gh pr review` fails or GitHub refuses self-review, use
+         `gh pr comment <n> --body "Agentry review outcome: APPROVED\n\n<concise summary>"`.
+         The verified comment plus `agent-approved` is the canonical Agentry
+         approval signal. Still add `agent-approved`, remove `ready-for-review`
+         and `blocked`, and verify with `gh pr view`.
          (Do NOT click merge — code-owner human merges.)
          BLOCK (any item failed):
-           gh pr review <n> --request-changes --body "<itemized issues>"
-           gh pr edit <n> --add-label blocked --remove-label ready-for-review
+           gh label create agent-approved --color 0e8a16 --force
+           gh pr review <n> --request-changes --body "Agentry review outcome: REQUEST CHANGES\n\n<itemized issues>"
+           gh pr edit <n> --remove-label agent-approved --add-label blocked --remove-label ready-for-review
            gh issue edit <id> --add-label changes-requested --remove-label ready-for-test
            gh issue comment <id> --body "<short review-fix summary and PR link>"
          If `gh pr review` fails, use `gh pr comment <n> --body "<REQUEST
          CHANGES: ...>"`, then perform the same PR and issue label updates.
-         Verify the PR no longer has `ready-for-review` and the issue has
-         `changes-requested`.
+         Verify the PR no longer has `ready-for-review` or `agent-approved`
+         and the issue has `changes-requested`.
       7. Append distilled cycle entry to
          agentry/logs/issues/<id>-<slug>/reviewer.log
       8. Overwrite session summary. Exit 0.

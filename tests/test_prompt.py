@@ -65,9 +65,11 @@ class TestMakePrompt:
     def test_runtime_contract_requires_gh_cli_writebacks(self):
         assert "gh` CLI" in RUNTIME_CONTRACT
         assert "Do not use GitHub app connectors" in RUNTIME_CONTRACT
-        assert "remove stale blocking labels" in RUNTIME_CONTRACT
+        assert "remove stale state labels" in RUNTIME_CONTRACT
         assert "`blocked`" in RUNTIME_CONTRACT
         assert "open PR already" in RUNTIME_CONTRACT
+        assert "`agent-approved`" in RUNTIME_CONTRACT
+        assert "GitHub refuses self-review" in RUNTIME_CONTRACT
 
     def test_build_role_prompt_wraps_custom_prompt(self):
         out = build_role_prompt("reviewer", ["reviewer"], "CUSTOM ROLE BODY")

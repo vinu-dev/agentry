@@ -29,6 +29,7 @@ STANDARD_LABELS: dict[str, str] = {
     "tests-failed": "d93f0b",  # red
     "changes-requested": "d93f0b",  # red
     "ready-for-review": "1d76db",  # blue
+    "agent-approved": "0e8a16",  # green
     "blocked": "b60205",  # dark red
     "merge-conflict": "d93f0b",  # red
     "needs-rebase": "fbca04",  # yellow

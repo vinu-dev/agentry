@@ -9,5 +9,6 @@ def test_standard_labels_cover_bundled_workflow_failure_states():
         "merge-conflict",
         "needs-rebase",
         "needs-hardware-verification",
+        "agent-approved",
     ):
         assert label in STANDARD_LABELS
