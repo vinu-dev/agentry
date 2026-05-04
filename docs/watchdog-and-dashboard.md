@@ -108,6 +108,12 @@ This lets Claude-style or wrapper-based agents say whether they are still
 working. Plain one-shot CLIs and local LLM wrappers still work; they simply use
 the legacy watchdog path.
 
+If a stream-JSON agent is inside a long tool call when the check-in arrives, it
+may emit tool progress or tool results before it can answer with a `STATUS:`
+line. Fresh stream activity during the check-in window is treated as progress:
+Agentry extends the run and logs that no explicit status was received. A kill
+only happens when the check-in window is quiet too.
+
 Codex usage-limit messages are detected in role logs. When Agentry sees a reset
 time, it backs that role off until after the reset instead of hammering the CLI.
 Each role also has a soft `token_budget`; exceeding it is recorded in the

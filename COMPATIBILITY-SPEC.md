@@ -120,6 +120,8 @@ Optional per-role fields:
 - `max_sessions`: must be `1` in this release.
 - `token_budget`: soft per-run budget recorded in session state.
 - `checkin_response_seconds`: wait time for a STATUS reply in stream-JSON mode.
+  Fresh stream-JSON activity during that window is treated as progress even when
+  the agent cannot answer with `STATUS:` immediately.
 - `trigger`: cheap GitHub label gates checked before starting an LLM process.
 - `prompt`: full prompt sent to the CLI over stdin. If absent, Agentry builds a
   generic prompt pointing the role at `docs/ai/roles/<role>.md`.
