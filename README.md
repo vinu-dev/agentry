@@ -137,6 +137,11 @@ Agentry records one session per role under `agentry/state/sessions/`. On restart
 after a crash or reboot, old running sessions whose PIDs are gone are marked
 `stale` and do not block new work.
 
+When isolated role worktrees are enabled, Agentry refuses to start a role in an
+existing worktree that has uncommitted or untracked repo changes. This protects
+the next issue or PR from inheriting partial work from a previous role run; clean
+or salvage the worktree first, then start the role again.
+
 ## Per-Role Model Assignment
 
 Each role can use a different model or provider:

@@ -238,8 +238,7 @@ def start(target_path: Path) -> None:
     webhook_url = os.environ.get("DISCORD_WEBHOOK_URL") or None
     if not webhook_url:
         click.secho(
-            "INFO  DISCORD_WEBHOOK_URL not set; events go to "
-            f"{target_logs_dir(target_path)} only",
+            f"INFO  DISCORD_WEBHOOK_URL not set; events go to {target_logs_dir(target_path)} only",
             fg="cyan",
         )
 

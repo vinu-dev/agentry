@@ -106,9 +106,7 @@ def build_recommended_config(
     data["automation"]["stop_when_queue_empty"] = bool(stop_when_queue_empty)
 
     data.setdefault("research", {})
-    data["research"]["allow_create_issues"] = bool(
-        mode == "autonomous" and enable_researcher
-    )
+    data["research"]["allow_create_issues"] = bool(mode == "autonomous" and enable_researcher)
     data["research"].setdefault("max_open_ready_for_design", 3)
 
     agents = data.setdefault("agents", {})

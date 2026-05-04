@@ -199,6 +199,13 @@ Use `agentry stop --target . ROLE` to stop one running role, or
 path is conservative: completed or stale session files are not used to kill old
 PIDs.
 
+If `isolate_worktrees: true`, Agentry starts each role from
+`agentry/worktrees/<role>`. Before reusing one of those worktrees, it checks
+`git status --porcelain`; a dirty worktree is reported as a worktree preparation
+error and the role is skipped until the operator commits, moves, or removes the
+leftover changes. This is intentional, because partial work from one issue must
+not leak into the next issue's branch.
+
 Use `agentry gui --target .` for a local status/configuration dashboard at
 `http://127.0.0.1:4783`, or launch it through the start script wrapper shown
 above.

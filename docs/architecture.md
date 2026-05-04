@@ -68,6 +68,9 @@ Each allowed role is a lightweight scheduler loop:
 1. Check for an active local session for that role.
 2. Check cheap GitHub triggers, such as open issues or PRs with matching labels.
 3. Prepare the role working directory, usually a per-role git worktree.
+   Existing isolated worktrees must be clean (`git status --porcelain` empty)
+   before a role is spawned; dirty worktrees are skipped as preparation errors
+   so partial changes cannot cross issue or PR boundaries.
 4. Build the role prompt from `agentry/config.yml`.
 5. Spawn the configured CLI and supervise it.
 6. Record session outcome, tokens, duration, and log path.

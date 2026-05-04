@@ -107,9 +107,7 @@ class TestTargetConfig:
         cfg = TargetConfig(
             target_repo="user/repo",
             agents={
-                "architect": AgentConfig(
-                    cli="claude", interval_min=5, total_min=30, stall_min=5
-                ),
+                "architect": AgentConfig(cli="claude", interval_min=5, total_min=30, stall_min=5),
             },
         )
         assert cfg.target_repo == "user/repo"

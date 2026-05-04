@@ -24,6 +24,7 @@ from agentry.notify import DiscordNotifier
 from agentry.orchestrator import (
     USAGE_LIMIT_BACKOFF_FALLBACK_SECONDS,
     Orchestrator,
+    _is_git_worktree_clean,
     _role_allowed_by_mode,
     _role_has_work,
     _usage_limit_backoff_seconds,
@@ -455,4 +456,56 @@ def test_role_cwd_returns_none_when_isolated_worktree_cannot_be_created(
 
     monkeypatch.setattr("agentry.orchestrator.subprocess.run", fail_worktree_add)
 
+    assert orch._role_cwd("implementer") is None
+
+
+def test_role_cwd_returns_none_when_existing_worktree_is_dirty(tmp_path: Path):
+    subprocess.run(["git", "init"], cwd=tmp_path, check=True, capture_output=True, text=True)
+    subprocess.run(
+        ["git", "config", "user.email", "test@example.com"],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "Agentry Test"],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    (tmp_path / "README.md").write_text("test target\n", encoding="utf-8")
+    subprocess.run(["git", "add", "README.md"], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-m", "initial"],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    target_config = TargetConfig(
+        target_repo="test/repo",
+        agents={
+            "implementer": AgentConfig(
+                cli=sys.executable,
+                args=[],
+                interval_min=60,
+                total_min=1,
+                stall_min=1,
+            ),
+        },
+    )
+    orch = Orchestrator(
+        target_config=target_config,
+        target_path=tmp_path,
+        notifier=DiscordNotifier(webhook_url=None),
+    )
+
+    worktree = orch._role_cwd("implementer")
+    assert worktree is not None
+    (worktree / "leftover.txt").write_text("partial agent output\n", encoding="utf-8")
+
+    assert not _is_git_worktree_clean(worktree)
     assert orch._role_cwd("implementer") is None

@@ -51,10 +51,7 @@ def test_finish_session_records_token_budget(tmp_path: Path):
 def test_parse_tokens_used_reads_latest_count(tmp_path: Path):
     log = tmp_path / "out.log"
     log.write_text(
-        "first line\n"
-        "tokens used 1,234\n"
-        "more work\n"
-        "tokens used 2,345\n",
+        "first line\ntokens used 1,234\nmore work\ntokens used 2,345\n",
         encoding="utf-8",
     )
 
