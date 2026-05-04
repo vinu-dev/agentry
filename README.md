@@ -147,6 +147,10 @@ not authority: Implementer retry paths and Tester reset the local feature branch
 to `origin/feature/<id>-<slug>` before rebasing. That keeps force-pushed or
 supervisor-rebased branches from being misreported as merge conflicts.
 
+When Tester opens a PR, the bundled prompt writes the multi-line PR body to a
+temporary file and calls `gh pr create --body-file`. That avoids shell-specific
+quoting failures on Windows and keeps validation evidence readable.
+
 ## Per-Role Model Assignment
 
 Each role can use a different model or provider:

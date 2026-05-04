@@ -185,6 +185,11 @@ class TestBundledDefaults:
         assert "pr-open" in text
         assert "ready-for-review" in text
 
+    def test_bundled_tester_uses_body_file_for_pr_create(self):
+        text = bundled_default_config_path().read_text(encoding="utf-8")
+        assert "--body-file" in text
+        assert '--body "<see template in tester.md>"' not in text
+
     def test_bundled_retry_roles_reset_local_feature_branch_from_remote(self):
         text = bundled_default_config_path().read_text(encoding="utf-8")
         reset_command = 'git switch -C "feature/<id>-${slug}" "origin/feature/<id>-${slug}"'

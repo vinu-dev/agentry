@@ -213,6 +213,11 @@ state. The standard Implementer retry path and Tester workflow reset their local
 feature branch from `origin/feature/<id>-<slug>` before rebasing so they validate
 the pushed branch, not an older local copy.
 
+The standard Tester prompt also writes PR descriptions to a temporary file and
+uses `gh pr create --body-file`. If you customize that role, keep the same
+pattern for multi-line markdown; passing long PR bodies directly through
+`--body` is fragile across Windows PowerShell and POSIX shells.
+
 Use `agentry gui --target .` for a local status/configuration dashboard at
 `http://127.0.0.1:4783`, or launch it through the start script wrapper shown
 above.
