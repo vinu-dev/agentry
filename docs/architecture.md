@@ -79,6 +79,11 @@ Each allowed role is a lightweight scheduler loop:
 
 If there is no matching GitHub work, no LLM process is started.
 
+For standard feature-branch validation, role prompts reset clean local feature
+branches from their matching `origin/feature/...` ref before rebasing. This keeps
+the orchestrator's reusable worktree optimization from turning a stale local
+branch into a false merge-conflict report.
+
 ## GitHub As The Queue
 
 Agentry does not need a separate scheduler brain for stage transitions. Roles

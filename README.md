@@ -142,6 +142,11 @@ existing worktree that has uncommitted or untracked repo changes. This protects
 the next issue or PR from inheriting partial work from a previous role run; clean
 or salvage the worktree first, then start the role again.
 
+The standard pipeline prompts also treat clean local feature branches as cache,
+not authority: Implementer retry paths and Tester reset the local feature branch
+to `origin/feature/<id>-<slug>` before rebasing. That keeps force-pushed or
+supervisor-rebased branches from being misreported as merge conflicts.
+
 ## Per-Role Model Assignment
 
 Each role can use a different model or provider:
