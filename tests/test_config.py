@@ -176,7 +176,7 @@ class TestBundledDefaults:
     def test_bundled_reviewer_documents_agent_approval_fallback(self):
         text = bundled_default_role_path("reviewer").read_text(encoding="utf-8")
         assert "agent-approved" in text
-        assert "GitHub refuses self-review" in text
+        assert "same account" in text
         assert "CI pending" in text
         assert "ScheduleWakeup" in text
 

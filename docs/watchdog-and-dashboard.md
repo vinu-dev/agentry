@@ -173,6 +173,10 @@ tick, cheap label checks decide whether the next role should run. If there is no
 matching issue or PR, no LLM is spawned.
 `pr-open` is kept on the issue while the PR is alive, so the issue does not look
 idle after the Tester removes `ready-for-test`.
+For reviewer outcomes, the default workflow records deterministic PR comments
+that begin `Agentry review outcome:` and pairs them with labels such as
+`agent-approved`, `blocked`, or `changes-requested`. It avoids formal
+`gh pr review` calls by default because GitHub refuses same-author self-review.
 
 ## Corner Cases
 

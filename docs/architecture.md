@@ -101,6 +101,10 @@ Each role handles one work item per run in the bundled standard workflow. The
 next role wakes only when GitHub contains the label it watches.
 `pr-open` is an issue status label, not a queue trigger; it keeps the linked
 issue visibly tied to its PR while review and approval happen on the PR.
+`agent-approved` plus a reviewer PR comment beginning `Agentry review outcome:`
+is the canonical Agentry review signal. The standard workflow does not call
+`gh pr review` by default because GitHub rejects self-review when the PR author
+and reviewer actor are the same account.
 
 ## Sessions And Watchdog State
 
