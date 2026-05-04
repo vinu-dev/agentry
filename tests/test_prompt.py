@@ -79,7 +79,7 @@ class TestMakePrompt:
         assert "`pr-open`" in RUNTIME_CONTRACT
         assert "open PR already" in RUNTIME_CONTRACT
         assert "`agent-approved`" in RUNTIME_CONTRACT
-        assert "GitHub refuses self-review" in RUNTIME_CONTRACT
+        assert "same-author self-review" in RUNTIME_CONTRACT
         assert "ScheduleWakeup" in RUNTIME_CONTRACT
         assert "orchestrator interval" in RUNTIME_CONTRACT
         assert "will retry" in RUNTIME_CONTRACT

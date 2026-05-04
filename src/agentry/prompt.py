@@ -20,9 +20,11 @@ RUNTIME_CONTRACT = """\
   permissions as the operator's `gh` auth.
 - After every label, comment, PR, or review writeback, verify the result with
   `gh issue view`, `gh pr view`, or `gh pr list`.
-- If a formal `gh pr review` write fails or GitHub refuses self-review,
-  immediately fall back to `gh pr comment` with the same review outcome. Treat
-  the verified comment plus labels as the canonical Agentry outcome.
+- Use PR comments plus labels as the default reviewer outcome channel. Do not
+  call formal `gh pr review` commands unless the target repo explicitly opts in
+  and the reviewer actor is allowed to review the PR. GitHub refuses
+  same-author self-review, and that must not become a role failure. Treat the
+  verified comment plus labels as the canonical Agentry outcome.
 - Approved PRs must end with label `agent-approved` and without
   `ready-for-review`, `blocked`, or retry labels. Request-changes outcomes must
   remove `agent-approved`, remove `ready-for-review`, add `blocked`, and move

@@ -23,8 +23,8 @@ Find PRs labeled `ready-for-review`. Process oldest first. If none, exit immedia
    - **Pending/queued/in progress:** leave `ready-for-review` in place, append a concise reviewer log entry, and exit 0 so the orchestrator can retry on its next interval.
    - Do not use scheduling, wakeup, background notification, or callback tools such as `ScheduleWakeup`, `Cron*`, `PushNotification`, or `RemoteTrigger`.
 7. Outcome:
-   - **All good:** approve via `gh pr review --approve` if GitHub allows it. Whether formal approval succeeds or GitHub refuses self-review, add label `agent-approved`, remove `ready-for-review` and `blocked`, keep the linked issue labeled `pr-open`, and post/verify a concise approval summary.
-   - **Issues found, fixable:** request changes via `gh pr review --request-changes` if possible. If formal review fails, post a PR comment beginning `Agentry review outcome: REQUEST CHANGES`. Remove `agent-approved`, add `blocked`, remove `ready-for-review`, and move the linked issue to `changes-requested` while keeping `pr-open`.
+   - **All good:** post a PR comment beginning `Agentry review outcome: APPROVED`, add label `agent-approved`, remove `ready-for-review` and `blocked`, keep the linked issue labeled `pr-open`, and verify the approval signal. Do not call `gh pr review --approve` by default because GitHub rejects self-review when the PR author and reviewer actor are the same account.
+   - **Issues found, fixable:** post a PR comment beginning `Agentry review outcome: REQUEST CHANGES`. Remove `agent-approved`, add `blocked`, remove `ready-for-review`, and move the linked issue to `changes-requested` while keeping `pr-open`.
    - **Issues found, fundamental:** remove `agent-approved`, add label `blocked` to PR, comment with the rationale. Operator will decide.
 8. Exit with code 0.
 
