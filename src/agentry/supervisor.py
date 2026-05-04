@@ -414,6 +414,9 @@ def _supervise_streamjson(
         reader_thread = threading.Thread(target=reader, daemon=True, name=f"reader-{cli}")
         reader_thread.start()
 
+        def get_last_event_at() -> float:
+            return last_event_at
+
         while True:
             # Claude Code emits a terminal `result` event when the agent has
             # completed its print-mode turn, but it keeps the process alive
@@ -498,6 +501,7 @@ def _supervise_streamjson(
                     text_buffer=text_buffer,
                     text_buffer_lock=text_buffer_lock,
                     last_event_lock=last_event_lock,
+                    last_event_at=get_last_event_at,
                     response_timeout=checkin_response_seconds,
                     log_file=log_file,
                 )
@@ -610,7 +614,8 @@ def _do_checkin(
     proc: subprocess.Popen[str],
     text_buffer: list[str],
     text_buffer_lock: threading.Lock,
-    last_event_lock: threading.Lock,  # unused but kept for signature symmetry
+    last_event_lock: threading.Lock,
+    last_event_at: Callable[[], float],
     response_timeout: float,
     log_file: IOBase,
 ) -> tuple[str, object]:
@@ -620,10 +625,12 @@ def _do_checkin(
       "WORKING", "DONE", "BLOCKED", "NEEDMORETIME", "NORESPONSE"
     detail is the parsed reason/minutes when relevant, else None.
     """
-    # Snapshot buffer length so we only scan NEW text that arrives after
-    # the check-in is sent.
+    # Snapshot buffer length and stream activity so we only inspect events that
+    # arrive after the check-in is sent.
     with text_buffer_lock:
         snapshot_len = sum(len(s) for s in text_buffer)
+    with last_event_lock:
+        activity_snapshot = last_event_at()
 
     # Send the check-in message.
     try:
@@ -634,11 +641,19 @@ def _do_checkin(
         log_file.write(f"--- check-in stdin write failed: {e} ---\n")
         return ("NORESPONSE", None)
 
-    # Wait for new assistant text containing a STATUS line.
+    # Wait for new assistant text containing a STATUS line. Some CLIs can be
+    # inside a long tool call when the check-in arrives; in that state they may
+    # emit tool progress or tool results before they can answer the new user
+    # message. Treat that fresh stream activity as proof the process is alive.
     deadline = time.monotonic() + response_timeout
+    observed_stream_activity = False
     while time.monotonic() < deadline:
         if proc.poll() is not None:
             break
+        with last_event_lock:
+            observed_stream_activity = observed_stream_activity or (
+                last_event_at() > activity_snapshot
+            )
         with text_buffer_lock:
             full = "".join(text_buffer)
             new_text = full[snapshot_len:]
@@ -654,6 +669,8 @@ def _do_checkin(
             return (verb, detail)
         time.sleep(0.5)
 
+    if observed_stream_activity:
+        return ("WORKING", "stream activity without STATUS")
     return ("NORESPONSE", None)
 
 

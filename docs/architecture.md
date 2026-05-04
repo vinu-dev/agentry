@@ -42,7 +42,7 @@ auth. The target repo owns the project-specific rules.
 | `configure.py` | Apply recommended modes, model profiles, budgets, and role toggles |
 | `dashboard.py` | Local HTTP status/configuration dashboard |
 | `orchestrator.py` | Starts one role loop per allowed role |
-| `supervisor.py` | Spawns LLM CLIs, watches stdout, handles timeouts/check-ins |
+| `supervisor.py` | Spawns LLM CLIs, watches stdout, handles timeouts/check-ins, and treats fresh stream-JSON tool activity as progress |
 | `session.py` | Writes session JSON, detects stale sessions, stops process trees |
 | `github.py` | Cheap GitHub label/PR checks and label initialization |
 | `notify.py` | Optional Discord lifecycle notifications |

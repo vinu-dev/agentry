@@ -167,6 +167,44 @@ class TestSupervise:
         assert time.monotonic() - started < 10.0
         assert '"type": "result"' in log.read_text(encoding="utf-8")
 
+    def test_streamjson_checkin_extends_when_tool_activity_continues(self, tmp_path: Path):
+        """Tool progress during a check-in means the agent is active, not hung."""
+        log = tmp_path / "stream-active.log"
+        code = (
+            "import json, sys, time\n"
+            "def emit(obj):\n"
+            "    print(json.dumps(obj), flush=True)\n"
+            "sys.stdin.readline()\n"
+            "emit({'type':'assistant','message':{'role':'assistant',"
+            "'content':[{'type':'text','text':'started'}]}})\n"
+            "sys.stdin.readline()\n"
+            "emit({'type':'system','subtype':'task_progress',"
+            "'description':'tool still running'})\n"
+            "time.sleep(0.2)\n"
+            "emit({'type':'result','subtype':'success','is_error':False,"
+            "'terminal_reason':'completed'})\n"
+            "for _ in sys.stdin:\n"
+            "    pass\n"
+        )
+
+        run = supervise(
+            cli=sys.executable,
+            args=["-c", code, "--input-format=stream-json"],
+            cwd=tmp_path,
+            env=None,
+            stall_seconds=30,
+            total_seconds=0.5,
+            log_path=log,
+            stdin_input="hello",
+            checkin_response_seconds=1.0,
+        )
+
+        text = log.read_text(encoding="utf-8")
+        assert run.reason == ExitReason.NORMAL
+        assert run.exit_code == 0
+        assert "tool still running" in text
+        assert "no STATUS reply" not in text
+
     def test_invalid_timeouts_raise(self, tmp_path: Path):
         log = tmp_path / "out.log"
         with pytest.raises(ValueError):
