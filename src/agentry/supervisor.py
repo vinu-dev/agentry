@@ -425,7 +425,9 @@ def _supervise_streamjson(
                     result = completion or _StreamJsonCompletion(exit_code=0)
                 _close_stdin(proc)
                 if not _wait_exit(proc, timeout=30.0):
-                    log_file.write("--- result event seen but process did not exit; killing ---\n")
+                    log_file.write(
+                        "--- result event completed; closing lingering process tree ---\n"
+                    )
                     _kill_tree(proc)
                 reader_thread.join(timeout=2.0)
                 return SupervisedRun(

@@ -80,6 +80,9 @@ class TestMakePrompt:
         assert "open PR already" in RUNTIME_CONTRACT
         assert "`agent-approved`" in RUNTIME_CONTRACT
         assert "GitHub refuses self-review" in RUNTIME_CONTRACT
+        assert "ScheduleWakeup" in RUNTIME_CONTRACT
+        assert "orchestrator interval" in RUNTIME_CONTRACT
+        assert "will retry" in RUNTIME_CONTRACT
 
     def test_invocation_contract_requires_immediate_execution(self):
         assert "work order for this run" in INVOCATION_CONTRACT

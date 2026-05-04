@@ -41,7 +41,7 @@ agentry/state/sessions/<role>.json
 The record includes:
 
 - role, mode, state
-- PID when a subprocess has spawned
+- PID only while the role subprocess is considered running
 - start, last-output, and finish timestamps
 - log path
 - exit reason and exit code
@@ -70,6 +70,10 @@ Stop controls are deliberately conservative.
 Agentry only kills a PID when the session is still marked `running` and the PID
 is alive. Completed or stale sessions are not killed, which avoids killing an
 unrelated process after a reboot or PID reuse.
+
+When a role finishes, Agentry clears the recorded PID. This keeps `status` and
+the dashboard from showing old completed process IDs as if they were still
+active.
 
 On Windows, stop uses `taskkill /T /F /PID <pid>` so child processes are also
 terminated. On Linux, supervised roles run in their own process group; stop
@@ -139,7 +143,7 @@ The dashboard listens on `127.0.0.1:4783` by default. It shows:
 - target repo and run mode
 - role enabled/mode-allowed state
 - current or latest session state
-- PID, token counts, start time, and latest log tail
+- active PID, token counts, start time, and latest log tail
 - per-role Stop and Stop All buttons
 - a Configure tab for run mode, model profile, Researcher, Release Engineer,
   auto-merge flag, and stop-when-empty flag

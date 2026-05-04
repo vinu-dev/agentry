@@ -177,6 +177,8 @@ class TestBundledDefaults:
         text = bundled_default_role_path("reviewer").read_text(encoding="utf-8")
         assert "agent-approved" in text
         assert "GitHub refuses self-review" in text
+        assert "CI pending" in text
+        assert "ScheduleWakeup" in text
 
     def test_bundled_tester_keeps_issue_visible_after_pr_creation(self):
         text = bundled_default_role_path("tester").read_text(encoding="utf-8")

@@ -91,7 +91,7 @@ class TestOrchestrator:
                 time.sleep(0.2)
             assert session is not None
             assert session["state"] == "completed"
-            assert session["pid"] is not None
+            assert session["pid"] is None
         finally:
             orch.shutdown()
             orch.notifier.stop(timeout=2.0)

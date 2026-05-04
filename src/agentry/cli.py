@@ -355,7 +355,7 @@ def _format_session_state(session: dict | None) -> str:
     tokens = session.get("tokens_used")
     budget = session.get("token_budget")
     bits = [str(state)]
-    if pid:
+    if pid and state == "running":
         bits.append(f"pid={pid}")
     if tokens is not None or budget is not None:
         bits.append(f"tokens={tokens or 0}/{budget or '?'}")

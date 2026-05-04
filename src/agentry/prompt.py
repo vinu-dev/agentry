@@ -34,6 +34,12 @@ RUNTIME_CONTRACT = """\
   present.
 - If `agent-approved` is missing in the target repo, create it before applying
   it: `gh label create agent-approved --color 0e8a16 --force`.
+- Do not use scheduling, wakeup, background notification, browser automation,
+  or external callback tools such as `ScheduleWakeup`, `Cron*`,
+  `PushNotification`, or `RemoteTrigger` inside an Agentry role. If external
+  state such as CI is still pending, leave the item in its current queue state,
+  record a concise status if the role instructions call for it, and exit; the
+  orchestrator interval will retry.
 - Never leave an item in the same trigger label after a completed cycle. Move it
   forward, move it back to a retry label, or mark it blocked with a comment that
   explains the next human or agent action.

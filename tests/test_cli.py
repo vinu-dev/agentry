@@ -94,6 +94,7 @@ def test_status_shows_session_tokens(tmp_path: Path):
 
     assert result.exit_code == 0
     assert "tokens=42/25000" in result.output
+    assert "pid=123" not in result.output
 
 
 def test_configure_defaults_updates_config(tmp_path: Path):

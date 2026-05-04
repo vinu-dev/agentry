@@ -96,6 +96,9 @@ no background service by default.
 Stop is conservative: Agentry kills only currently running session PIDs, not
 completed or stale records.
 
+Completed sessions clear their recorded PID before status/dashboard rendering,
+so a visible PID means there is still an active role process to inspect or stop.
+
 When `isolate_worktrees: true`, Agentry also checks existing role worktrees
 before reuse. A dirty `agentry/worktrees/<role>` directory is skipped until its
 leftover repo changes are committed, moved, or removed, which keeps one issue's

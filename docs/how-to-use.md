@@ -183,8 +183,10 @@ create one yourself.
 ## Daily Operation
 
 Use `agentry status --target .` to inspect role sessions, run mode, recent
-logs, and token-budget state. From a fresh target where the venv may not exist
-yet, use the start script wrapper:
+logs, active PIDs, and token-budget state. Completed sessions do not display
+old PIDs; a PID in status means Agentry still believes that role is running.
+From a fresh target where the venv may not exist yet, use the start script
+wrapper:
 
 ```powershell
 .\agentry\start.ps1 status --target .

@@ -46,6 +46,7 @@ def test_finish_session_records_token_budget(tmp_path: Path):
     assert record["tokens_used"] == 120
     assert record["budget_exceeded"] is True
     assert record["duration_seconds"] == 1.235
+    assert record["pid"] is None
 
 
 def test_parse_tokens_used_reads_latest_count(tmp_path: Path):
