@@ -174,6 +174,13 @@ GitHub ref stamped into the start script. Later runs reuse the venv. Set
 `AGENTRY_INSTALL_REF` only when you intentionally want to test or upgrade to a
 specific branch, tag, or commit.
 
+When you run a CLI subcommand through the wrapper, such as `status`, `doctor`,
+`configure`, or `gui`, the wrapper reuses an existing `agentry/.venv/` and does
+not force-reinstall only because the local install-ref marker is missing or
+stale. This keeps status and health checks safe while Agentry is already
+running. To intentionally refresh the venv to the pinned ref, stop Agentry first
+and set `AGENTRY_FORCE_INSTALL=1` for that wrapper invocation.
+
 Agentry runs in the foreground. Press Ctrl-C or close the terminal to stop it.
 Rebooting the computer stops it too; there is no background service unless you
 create one yourself.
@@ -284,8 +291,9 @@ If a role starts but exits immediately, read its newest log under
 `agentry/logs/<role>/`.
 
 If a fresh venv installs the wrong Agentry version, check the ref in
-`agentry/start.ps1` or `agentry/start.sh`, delete `agentry/.venv/`, and rerun
-the start script.
+`agentry/start.ps1` or `agentry/start.sh`, stop any Agentry process using that
+venv, then rerun the wrapper with `AGENTRY_FORCE_INSTALL=1`. If the venv is
+already corrupted, delete `agentry/.venv/` and rerun the start script.
 
 If GitHub operations fail, verify:
 

@@ -240,6 +240,11 @@ Git ref into them. Fresh `agentry/.venv/` installs use that ref, not mutable
 
 This keeps target repos reproducible.
 
+Wrapper subcommands such as `status`, `doctor`, `configure`, and `gui` reuse an
+existing repo-local venv even when the install-ref marker is missing or stale.
+They do not force-reinstall into a live venv. Intentional refreshes require the
+operator to stop Agentry and run the wrapper with `AGENTRY_FORCE_INSTALL=1`.
+
 ## Extension Model
 
 The standard roster is:
