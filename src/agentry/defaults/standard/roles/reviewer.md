@@ -19,11 +19,14 @@ Find PRs labeled `ready-for-review`. Process oldest first. If none, exit immedia
    - **Tests**: are there tests covering the new behavior? Are existing tests still passing?
    - **Style**: does it follow project conventions?
    - **Edge cases**: does it handle obvious failure modes?
-6. Outcome:
+6. Check CI with `gh pr checks <n> --json name,state,bucket`.
+   - **Pending/queued/in progress:** leave `ready-for-review` in place, append a concise reviewer log entry, and exit 0 so the orchestrator can retry on its next interval.
+   - Do not use scheduling, wakeup, background notification, or callback tools such as `ScheduleWakeup`, `Cron*`, `PushNotification`, or `RemoteTrigger`.
+7. Outcome:
    - **All good:** approve via `gh pr review --approve` if GitHub allows it. Whether formal approval succeeds or GitHub refuses self-review, add label `agent-approved`, remove `ready-for-review` and `blocked`, keep the linked issue labeled `pr-open`, and post/verify a concise approval summary.
    - **Issues found, fixable:** request changes via `gh pr review --request-changes` if possible. If formal review fails, post a PR comment beginning `Agentry review outcome: REQUEST CHANGES`. Remove `agent-approved`, add `blocked`, remove `ready-for-review`, and move the linked issue to `changes-requested` while keeping `pr-open`.
    - **Issues found, fundamental:** remove `agent-approved`, add label `blocked` to PR, comment with the rationale. Operator will decide.
-7. Exit with code 0.
+8. Exit with code 0.
 
 ## Constraints
 
@@ -34,5 +37,6 @@ Find PRs labeled `ready-for-review`. Process oldest first. If none, exit immedia
 ## Failure modes
 
 - PR has merge conflicts: label `blocked`, comment "rebase needed," exit 0.
+- PR checks are still running: leave labels unchanged, log "CI pending," exit 0.
 - Diff is enormous (e.g., > 1000 lines): label `blocked`, comment "PR too large, split required," exit 0.
 - Cannot determine intent (design doc missing, issue unclear): label `blocked`, exit 0.

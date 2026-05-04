@@ -168,6 +168,13 @@ STATUS:NEEDMORETIME <minutes>
 
 Killing is the fallback for no response, not the first move.
 
+Role processes must not schedule their own wakeups or background callbacks.
+When a role is waiting on external state such as queued CI checks, it records
+the pending state if its role instructions call for that, leaves queue labels
+unchanged, and exits normally. The orchestrator's interval is the retry
+mechanism, which keeps one supervisor in control of process lifetime and queue
+state.
+
 ## Cross-Platform Model/CLI Assignment
 
 Each role has its own `cli` and `args`, so different roles can use different

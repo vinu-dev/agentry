@@ -13,7 +13,7 @@ For regulated software, see the [medical-device example](../medical-device/).
 | `architect` | issues labeled `ready-for-design` | spec branch + `ready-for-implementation` |
 | `implementer` | issues labeled `ready-for-implementation`, `tests-failed`, or `changes-requested` | code/tests + `ready-for-test` |
 | `tester` | issues labeled `ready-for-test` | issue labeled `pr-open` plus PR labeled `ready-for-review`, or issue labeled `tests-failed` |
-| `reviewer` | PRs labeled `ready-for-review` | `agent-approved` or `blocked`/`changes-requested` |
+| `reviewer` | PRs labeled `ready-for-review` | `agent-approved`, `blocked`/`changes-requested`, or unchanged while CI is still pending |
 | `release` | release-approved work, when enabled | tags, artifacts, GitHub Release |
 
 ## Lifecycle
@@ -27,7 +27,7 @@ ready-for-design issue
   -> tester
   -> pr-open issue
   -> ready-for-review PR
-  -> reviewer
+  -> reviewer (waits for CI by exiting; no wakeup tools)
   -> agent-approved PR
 ```
 

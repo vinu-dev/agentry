@@ -90,6 +90,7 @@ def finish_session(
         target_path,
         role,
         state=state,
+        pid=None,
         finished_at=utc_now(),
         exit_reason=str(run.reason),
         exit_code=run.exit_code,
