@@ -97,6 +97,8 @@ Optional top-level fields:
 
 - `mode`: `manual`, `pipeline`, or `autonomous`. Default is `pipeline`.
 - `isolate_worktrees`: run each role in its own git worktree when possible.
+  Existing role worktrees must be clean before reuse; dirty worktrees are
+  skipped with a preparation error.
 - `automation`: operator-level controls. `auto_merge` and
   `stop_when_queue_empty` are configuration flags for current/future workflows.
 - `research`: controls whether Researcher may create new GitHub issues.

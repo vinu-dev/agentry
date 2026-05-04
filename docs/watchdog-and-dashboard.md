@@ -76,6 +76,12 @@ terminated. On Linux, supervised roles run in their own process group; stop
 sends SIGTERM to that process group, waits briefly, then uses SIGKILL only if
 needed.
 
+When isolated role worktrees are enabled, Agentry also refuses to start a role
+from an existing dirty worktree. Uncommitted or untracked repo changes are
+reported as a worktree preparation error so an interrupted run cannot leak
+partial work into the next issue or PR. The operator should commit, move, or
+remove those leftovers, then let the role retry on its normal interval.
+
 ## Check-Ins and Limits
 
 Two supervision modes exist:

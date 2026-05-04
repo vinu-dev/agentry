@@ -305,6 +305,9 @@ class Orchestrator:
 
         worktree = target_worktrees_dir(self.target_path) / _safe_role_name(role)
         if _is_git_repo(worktree):
+            if not _is_git_worktree_clean(worktree):
+                logger.warning("role %s worktree is dirty; refusing to spawn", role)
+                return None
             return worktree
 
         worktree.parent.mkdir(parents=True, exist_ok=True)
@@ -331,6 +334,29 @@ class Orchestrator:
             logger.warning("could not create worktree for role %s: %s", role, e)
             return None
         return worktree
+
+
+def _is_git_worktree_clean(path: Path) -> bool:
+    """Return True when a role worktree has no local repo changes."""
+    try:
+        subprocess.run(
+            ["git", "-C", str(path), "update-index", "-q", "--refresh"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        status = subprocess.run(
+            ["git", "-C", str(path), "status", "--porcelain"],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+        logger.warning("could not inspect role worktree %s: %s", path, e)
+        return False
+    return status.stdout.strip() == ""
 
 
 def _usage_limit_backoff_seconds(
@@ -398,10 +424,7 @@ def _role_allowed_by_mode(target_config: TargetConfig, role: str) -> bool:
     if target_config.mode == "manual":
         return False
     if role == "researcher":
-        return (
-            target_config.mode == "autonomous"
-            and target_config.research.allow_create_issues
-        )
+        return target_config.mode == "autonomous" and target_config.research.allow_create_issues
     return True
 
 

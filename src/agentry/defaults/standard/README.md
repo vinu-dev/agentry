@@ -96,6 +96,11 @@ no background service by default.
 Stop is conservative: Agentry kills only currently running session PIDs, not
 completed or stale records.
 
+When `isolate_worktrees: true`, Agentry also checks existing role worktrees
+before reuse. A dirty `agentry/worktrees/<role>` directory is skipped until its
+leftover repo changes are committed, moved, or removed, which keeps one issue's
+partial work out of the next issue's branch.
+
 ## Upgrade
 
 The start scripts install Agentry from the Git ref pinned in the script. To
