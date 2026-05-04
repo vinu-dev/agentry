@@ -110,6 +110,9 @@ issue visibly tied to its PR while review and approval happen on the PR.
 is the canonical Agentry review signal. The standard workflow does not call
 `gh pr review` by default because GitHub rejects self-review when the PR author
 and reviewer actor are the same account.
+Tester PR creation uses a temporary PR body file plus `gh pr create
+--body-file`, so multi-line validation evidence is transported as a file instead
+of shell-quoted command text.
 
 ## Sessions And Watchdog State
 
