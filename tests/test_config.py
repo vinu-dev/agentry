@@ -185,6 +185,11 @@ class TestBundledDefaults:
         assert "pr-open" in text
         assert "ready-for-review" in text
 
+    def test_bundled_retry_roles_reset_local_feature_branch_from_remote(self):
+        text = bundled_default_config_path().read_text(encoding="utf-8")
+        reset_command = 'git switch -C "feature/<id>-${slug}" "origin/feature/<id>-${slug}"'
+        assert text.count(reset_command) >= 2
+
     def test_role_rule_path_falls_back_to_bundled(self, tmp_path: Path):
         path = role_rule_path(tmp_path, "architect")
         # tmp_path has no docs/ai/roles/, so fallback kicks in.

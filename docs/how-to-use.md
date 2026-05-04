@@ -208,6 +208,11 @@ error and the role is skipped until the operator commits, moves, or removes the
 leftover changes. This is intentional, because partial work from one issue must
 not leak into the next issue's branch.
 
+Clean local branches inside role worktrees are still treated as disposable role
+state. The standard Implementer retry path and Tester workflow reset their local
+feature branch from `origin/feature/<id>-<slug>` before rebasing so they validate
+the pushed branch, not an older local copy.
+
 Use `agentry gui --target .` for a local status/configuration dashboard at
 `http://127.0.0.1:4783`, or launch it through the start script wrapper shown
 above.
