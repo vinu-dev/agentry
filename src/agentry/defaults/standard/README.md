@@ -107,8 +107,11 @@ partial work out of the next issue's branch.
 ## Upgrade
 
 The start scripts install Agentry from the Git ref pinned in the script. To
-upgrade intentionally, update that ref or set `AGENTRY_INSTALL_REF`, delete
-`.venv/`, and rerun the start script.
+upgrade intentionally, update that ref or set `AGENTRY_INSTALL_REF`, stop any
+running Agentry process that uses this venv, and rerun the wrapper with
+`AGENTRY_FORCE_INSTALL=1`. Wrapper subcommands reuse an existing venv without
+force-reinstalling, so `status`, `doctor`, `configure`, and `gui` are safe to
+run while Agentry is live.
 
 ## Remove
 

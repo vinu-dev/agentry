@@ -98,6 +98,12 @@ commands without starting role loops:
 ./agentry/start.sh gui --target .
 ```
 
+When the repo-local venv already exists, wrapper subcommands reuse it instead
+of force-reinstalling just because the pinned-ref marker is missing or stale.
+That makes `status`, `doctor`, `configure`, and `gui` safe to run while the
+orchestrator is live. To intentionally refresh the venv to the pinned ref, stop
+Agentry first and set `AGENTRY_FORCE_INSTALL=1` for that wrapper invocation.
+
 The dashboard shows role sessions, latest logs, token budget state, and Stop
 buttons. It also writes recommended options: `manual`, `pipeline`, or
 `autonomous` mode; Researcher and Release toggles; and balanced/cheap/strong
