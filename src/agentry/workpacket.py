@@ -8,6 +8,7 @@ rediscovering queue state or reading full logs.
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -18,6 +19,16 @@ from agentry.github import (
     pr_checks_state,
 )
 from agentry.session import list_sessions
+
+
+@dataclass(frozen=True)
+class WorkCandidate:
+    """One GitHub queue item discovered during cheap preflight."""
+
+    kind: str
+    label: str
+    item: dict
+    checks: str | None = None
 
 
 def work_packet_path(target_path: Path | str, role: str) -> Path:
@@ -79,14 +90,19 @@ def _build_packet(
             lines.append(f"- PR labels: {', '.join(trigger.pr_labels)}")
             lines.append(f"- PR check gate: {trigger.pr_check_gate}")
 
-    lines.extend(["", "## GitHub Candidates"])
+    groups: list[tuple[str, str, list[WorkCandidate]]] = []
+    selected: WorkCandidate | None = None
     if trigger is None:
-        lines.append("- No trigger labels to prefetch.")
+        lines.extend(["", "## Selected Candidate", "- None; no trigger labels to prefetch."])
     else:
-        for label in trigger.issue_labels:
-            lines.extend(_issue_candidate_lines(target_config, label))
-        for label in trigger.pr_labels:
-            lines.extend(_pr_candidate_lines(target_config, label))
+        groups = _candidate_groups(target_config, cfg)
+        selected = _select_candidate(groups, cfg)
+        lines.extend(["", "## Selected Candidate"])
+        lines.extend(_selected_candidate_lines(selected))
+        lines.extend(["", "## Other Candidates"])
+        lines.append("- Read-only context. Do not process these in this run.")
+        for kind, label, candidates in groups:
+            lines.extend(_candidate_lines(kind, label, candidates, selected))
 
     lines.extend(["", "## Recent Sessions"])
     sessions = sorted(
@@ -126,55 +142,149 @@ def _build_packet(
                 "- Inspect PR file lists before diffs. Use targeted file diffs "
                 "when the full diff is large."
             ),
+            "- If a Selected Candidate is present, process only that item in this run.",
+            "- Do not inspect, relabel, test, review, or repair other candidates except "
+            "to verify they do not block the Selected Candidate.",
             "- If CI/checks are pending, leave labels unchanged and exit so Agentry can retry.",
         ]
     )
     return "\n".join(lines) + "\n"
 
 
-def _issue_candidate_lines(target_config: TargetConfig, label: str) -> list[str]:
-    issues = list_open_issues_with_label(
-        target_config.target_repo,
-        label,
-        limit=target_config.context.candidate_limit,
+def _candidate_groups(
+    target_config: TargetConfig,
+    cfg: AgentConfig,
+) -> list[tuple[str, str, list[WorkCandidate]]]:
+    trigger = cfg.trigger
+    if trigger is None:
+        return []
+
+    groups: list[tuple[str, str, list[WorkCandidate]]] = []
+    for label in trigger.issue_labels:
+        issues = list_open_issues_with_label(
+            target_config.target_repo,
+            label,
+            limit=target_config.context.candidate_limit,
+        )
+        groups.append(("issue", label, [WorkCandidate("issue", label, item) for item in issues]))
+
+    for label in trigger.pr_labels:
+        prs = list_open_prs_with_label(
+            target_config.target_repo,
+            label,
+            limit=target_config.context.candidate_limit,
+        )
+        candidates = []
+        for item in prs:
+            number = item.get("number")
+            checks = "unknown"
+            if isinstance(number, int):
+                checks = pr_checks_state(target_config.target_repo, number)
+            candidates.append(WorkCandidate("pr", label, item, checks))
+        groups.append(("pr", label, candidates))
+
+    return groups
+
+
+def _select_candidate(
+    groups: list[tuple[str, str, list[WorkCandidate]]],
+    cfg: AgentConfig,
+) -> WorkCandidate | None:
+    trigger = cfg.trigger
+    for kind, _label, candidates in groups:
+        eligible = list(candidates)
+        if kind == "pr" and trigger is not None:
+            eligible = [
+                candidate
+                for candidate in eligible
+                if _checks_pass_gate(candidate.checks or "unknown", trigger.pr_check_gate)
+            ]
+        if eligible:
+            return sorted(eligible, key=_candidate_sort_key)[0]
+    return None
+
+
+def _selected_candidate_lines(selected: WorkCandidate | None) -> list[str]:
+    if selected is None:
+        return [
+            "- None found that passed preflight gates.",
+            "- Exit successfully if current GitHub state still has no eligible work.",
+        ]
+
+    number = selected.item.get("number", "?")
+    title = _one_line(selected.item.get("title"))
+    labels = _label_names(selected.item.get("labels"))
+    updated = selected.item.get("updatedAt", "?")
+    lines = [
+        f"- Type: {selected.kind}",
+        f"- Trigger label: `{selected.label}`",
+        f"- Number: #{number}",
+        f"- Title: {title}",
+        f"- Labels: [{labels}]",
+        f"- Updated: {updated}",
+    ]
+    head = selected.item.get("headRefName")
+    if isinstance(head, str):
+        lines.append(f"- Head branch: {head}")
+    if selected.checks is not None:
+        lines.append(f"- Checks: {selected.checks}")
+    lines.extend(
+        [
+            "",
+            f"Process ONLY {selected.kind} #{number} in this run.",
+            "Do not inspect, relabel, repair, test, review, or merge any other candidate "
+            "unless it directly blocks this selected item.",
+        ]
     )
-    lines = [f"### Issues labeled `{label}`"]
-    if not issues:
+    return lines
+
+
+def _candidate_lines(
+    kind: str,
+    label: str,
+    candidates: list[WorkCandidate],
+    selected: WorkCandidate | None,
+) -> list[str]:
+    heading = "Issues" if kind == "issue" else "PRs"
+    lines = [f"### {heading} labeled `{label}`"]
+    if not candidates:
         lines.append("- None found or GitHub lookup unavailable.")
         return lines
-    for item in issues:
+
+    for candidate in sorted(candidates, key=_candidate_sort_key):
+        item = candidate.item
         number = item.get("number", "?")
         title = _one_line(item.get("title"))
         labels = _label_names(item.get("labels"))
         updated = item.get("updatedAt", "?")
-        lines.append(f"- #{number}: {title} labels=[{labels}] updated={updated}")
+        marker = " (selected)" if candidate == selected else ""
+        if kind == "pr":
+            head = item.get("headRefName", "?")
+            checks = candidate.checks or "unknown"
+            lines.append(
+                f"- #{number}: {title}{marker} head={head} labels=[{labels}] "
+                f"checks={checks} updated={updated}"
+            )
+        else:
+            lines.append(f"- #{number}: {title}{marker} labels=[{labels}] updated={updated}")
     return lines
 
 
-def _pr_candidate_lines(target_config: TargetConfig, label: str) -> list[str]:
-    prs = list_open_prs_with_label(
-        target_config.target_repo,
-        label,
-        limit=target_config.context.candidate_limit,
-    )
-    lines = [f"### PRs labeled `{label}`"]
-    if not prs:
-        lines.append("- None found or GitHub lookup unavailable.")
-        return lines
-    for item in prs:
-        number = item.get("number")
-        title = _one_line(item.get("title"))
-        labels = _label_names(item.get("labels"))
-        head = item.get("headRefName", "?")
-        updated = item.get("updatedAt", "?")
-        checks = "unknown"
-        if isinstance(number, int):
-            checks = pr_checks_state(target_config.target_repo, number)
-        lines.append(
-            f"- #{number}: {title} head={head} labels=[{labels}] "
-            f"checks={checks} updated={updated}"
-        )
-    return lines
+def _checks_pass_gate(state: str, check_gate: str) -> bool:
+    if state == "unknown":
+        return True
+    if check_gate == "settled":
+        return state in {"none", "green", "failed"}
+    if check_gate == "green":
+        return state in {"none", "green"}
+    return True
+
+
+def _candidate_sort_key(candidate: WorkCandidate) -> tuple[int, str]:
+    number = candidate.item.get("number")
+    if isinstance(number, int):
+        return (number, "")
+    return (10**12, str(number))
 
 
 def _write_capped(path: Path, text: str, *, max_bytes: int) -> None:

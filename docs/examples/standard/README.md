@@ -82,11 +82,11 @@ Then:
 5. Run `agentry/start.ps1` or `./agentry/start.sh` when you want agents active.
 
 The generated start scripts pin Agentry to the selected branch, tag, or commit
-at install time. Prefer a release tag such as `v0.1.1` for stable target repos.
+at install time. Prefer a release tag such as `v0.1.2` for stable target repos.
 On Linux, that looks like:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/vinu-dev/agentry/v0.1.1/scripts/add-to-target.sh | AGENTRY_BRANCH=v0.1.1 bash
+curl -fsSL https://raw.githubusercontent.com/vinu-dev/agentry/v0.1.2/scripts/add-to-target.sh | AGENTRY_BRANCH=v0.1.2 bash
 ```
 
 ## Model Defaults
@@ -102,7 +102,8 @@ scripts by changing that role's `cli` and `args`.
 
 The standard config also enables bounded work packets and sets Reviewer
 `trigger.pr_check_gate: settled`, so review does not spawn while all matching PR
-checks are still pending.
+checks are still pending. Each work packet names one `Selected Candidate`; roles
+must process only that item during the current invocation.
 
 ## Merge-Sensitive Paths
 

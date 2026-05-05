@@ -7,13 +7,15 @@ It is documentation and starter material, not a regulatory template. Copy the
 pattern into a real target repo, then adapt it to your Quality Management
 System, Design History File, risk process, and validation evidence.
 
-For regulated targets, start from a released Agentry tag such as `v0.1.1` and
+For regulated targets, start from a released Agentry tag such as `v0.1.2` and
 pin that tag in the generated start scripts. Add controlled documents,
 generated traceability files, release files, and risk/security records to
 `merge_sensitive_paths` so overlapping PRs move through review one at a time.
 Keep `context.work_packets` enabled and use `trigger.pr_check_gate: settled` on
 reviewer-style PR roles so expensive compliance reviewers do not launch while
-all matching PR checks are still pending.
+all matching PR checks are still pending. Work packets name one `Selected
+Candidate`, which keeps each compliance role focused on one auditable item per
+cycle.
 
 ## Why An Extended Roster
 

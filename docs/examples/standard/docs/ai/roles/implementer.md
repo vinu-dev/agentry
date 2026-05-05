@@ -4,6 +4,8 @@ Writes code per the design doc.
 
 ## Trigger
 Find issues labeled `ready-for-implementation` OR `tests-failed`. Process oldest first. If none, exit immediately with code 0.
+If Agentry provides a work packet with a `Selected Candidate`, process that
+issue only; otherwise pick the oldest matching issue in trigger-priority order.
 
 ## Steps per issue
 

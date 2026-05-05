@@ -17,7 +17,7 @@ starts it again with the target repo's `agentry/start.ps1` or `agentry/start.sh`
   limits without silently spinning.
 - Keep wrapper status/config commands safe while Agentry is live.
 - Prevent avoidable model launches by checking labels, PR check state, and
-  bounded work packets before spawning role CLIs.
+  bounded selected-candidate work packets before spawning role CLIs.
 
 ## Run Modes
 
@@ -65,11 +65,12 @@ Before spawning a role, Agentry may also write a work packet:
 agentry/state/workpackets/<role>.md
 ```
 
-The packet is overwritten each run and is safe to delete. It contains bounded
-GitHub candidates, trigger labels, recent session summaries, and context rules
-such as log-tail and diff-size guidance. The prompt receives the absolute packet
-path so the model starts from compact context rather than reading whole logs or
-performing broad discovery.
+The packet is overwritten each run and is safe to delete. It contains one
+`Selected Candidate`, bounded read-only GitHub candidates, trigger labels,
+recent session summaries, and context rules such as log-tail and diff-size
+guidance. The prompt receives the absolute packet path so the model starts from
+compact context rather than reading whole logs, performing broad discovery, or
+touching a second queued item.
 
 ## Stop Safety
 
@@ -136,8 +137,9 @@ session and shown by status/dashboard.
 
 Token budgets are not kill triggers. Agentry reduces burn before spawn: no
 matching labels means no model process, `trigger.pr_check_gate` can wait for PR
-checks, and work packets cap the initial context. Once a role is running, normal
-timeout and check-in policy controls process lifetime.
+checks, work packets select one item, and packet byte caps bound the initial
+context. Once a role is running, normal timeout and check-in policy controls
+process lifetime.
 
 ## Cross-Platform CLI Resolution
 
@@ -227,6 +229,7 @@ continue through CI and review.
 | PID is reused after a crash | Completed/stale sessions are not killed by stop commands. |
 | CLI missing | `doctor` warns; runtime records `spawn-failed` and retries later. |
 | GitHub has no matching label | The cheap scheduler check skips the LLM run. |
+| Many items have matching labels | The work packet names one Selected Candidate and marks the rest read-only for this run. |
 | PR checks are pending | Reviewer can skip before spawn when `pr_check_gate: settled` is configured. |
 | GitHub check lookup fails | The gate allows the role to run so the queue does not deadlock on a transient API/CLI failure. |
 | Researcher should not create work | Keep `mode: pipeline` or `manual`; Researcher is blocked even if enabled. |
