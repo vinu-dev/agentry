@@ -331,6 +331,12 @@ The standard roster is:
 researcher -> architect -> implementer -> tester -> reviewer -> release
 ```
 
+Researcher is the product-owner discovery input for that roster. It creates new
+work only when autonomous research is enabled, and its issues should contain
+source URLs with access dates, a product hypothesis, a small MVP boundary, a
+non-copying boundary, and validation expectations before Architect turns them
+into a design.
+
 Regulated or security-heavy projects can add roles such as:
 
 ```text

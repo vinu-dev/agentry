@@ -159,6 +159,13 @@ model profiles.
 | `pipeline` | Default. Processes existing GitHub labels, but Researcher cannot create new issues. |
 | `autonomous` | Allows Researcher only when `research.allow_create_issues: true`. |
 
+Researcher is intended to act like a product-owner discovery role. In
+autonomous mode it should look for well-sourced product opportunities,
+including competitor and domain patterns, then file small, scoped issues with
+source URLs and access dates, an MVP hypothesis, validation expectations, and
+clear out-of-scope boundaries. It should identify capability patterns worth
+adapting, not copy a competitor's proprietary UX or claims.
+
 ## Start And Stop
 
 Start foreground agents:

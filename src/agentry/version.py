@@ -1,3 +1,3 @@
 """Version metadata. Single source of truth."""
 
-__version__ = "0.1.4"
+__version__ = "0.1.5"

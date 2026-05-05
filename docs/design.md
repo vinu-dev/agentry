@@ -29,6 +29,10 @@ The default experience is intentionally local:
 - Prefer explicit operator gates for dangerous transitions. Researcher and
   Release are disabled by default; merge behavior stays controlled by the
   target repo and operator policy.
+- Treat Researcher as product-owner discovery, not just issue cleanup. It should
+  use repo goals, competitor/product research, and credible public sources to
+  propose small, sourced, testable opportunities for the pipeline, with explicit
+  source URLs, access dates, MVP scope, and non-copying boundaries.
 - Treat local state as supervision state only. Logs and sessions explain what
   happened; GitHub remains the durable workflow truth.
 - Be cross-platform. Windows and Linux start scripts, process handling, npm
