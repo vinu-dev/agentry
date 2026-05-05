@@ -182,10 +182,34 @@ def _build_packet(
             "- If a Selected Candidate is present, process only that item in this run.",
             "- Do not inspect, relabel, test, review, or repair other candidates except "
             "to verify they do not block the Selected Candidate.",
-            "- If CI/checks are pending, leave labels unchanged and exit so Agentry can retry.",
+            _ci_pending_context_rule(trigger),
         ]
     )
     return "\n".join(lines) + "\n"
+
+
+def _ci_pending_context_rule(trigger) -> str:
+    """Return queue guidance for pending CI that matches the role trigger shape."""
+    if trigger is None:
+        return (
+            "- If CI/checks are pending, do not guess. Follow the role's explicit "
+            "queue rules and record the pending state."
+        )
+
+    if trigger.pr_labels:
+        return (
+            "- For PR-triggered roles, if required CI/checks are still pending "
+            "for the selected PR, leave labels unchanged, record the pending "
+            "state, and exit so Agentry can retry after the check gate opens."
+        )
+
+    return (
+        "- For issue-triggered roles that open or update a PR, do not leave the "
+        "issue in the same trigger label solely because GitHub checks are "
+        "pending after local validation passed. Move the issue/PR to the role's "
+        "next queue state; downstream PR check gates will defer review until "
+        "checks settle."
+    )
 
 
 def _candidate_groups(

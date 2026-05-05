@@ -51,6 +51,8 @@ def test_write_role_work_packet_includes_trigger_and_context(monkeypatch, tmp_pa
     assert "#12: Ready PR" in text
     assert "checks=green" in text
     assert "Get-Content -Tail 120" in text
+    assert "For PR-triggered roles" in text
+    assert "leave labels unchanged" in text
 
 
 def test_write_role_work_packet_selects_one_issue_by_trigger_priority(
@@ -110,6 +112,11 @@ def test_write_role_work_packet_selects_one_issue_by_trigger_priority(
     assert "Process ONLY issue #14" in text
     assert "#12:" in text
     assert "Do not process these in this run" in text
+    assert "For issue-triggered roles that open or update a PR" in text
+    assert (
+        "do not leave the issue in the same trigger label solely because GitHub checks are pending"
+        in text
+    )
 
 
 def test_write_role_work_packet_skips_pending_pr_for_settled_gate(
