@@ -2,6 +2,26 @@
 
 All notable Agentry release changes are recorded here.
 
+## v0.1.6 - 2026-05-05
+
+Research backlog guard release.
+
+### Added
+
+- Researcher now has an enforced cheap backlog guard. Agentry counts open
+  issues with `research.backlog_labels` before launching the Researcher LLM and
+  skips the run when the counted queue is at or above
+  `research.max_open_ready_for_design`.
+- Targets can include upstream pre-design labels in `research.backlog_labels`
+  so regulated flows can count risk-intake issues as design supply without
+  repeatedly waking Researcher.
+
+### Fixed
+
+- `research.max_open_ready_for_design` is now an operational scheduler guard,
+  not only documentation. This prevents autonomous targets from burning
+  Researcher tokens while the design queue is already full.
+
 ## v0.1.5 - 2026-05-05
 
 Product-owner Researcher defaults release.
