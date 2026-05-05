@@ -70,6 +70,12 @@ Standard roles share one feature branch per issue, normally
 the pushed remote branch before rebasing. Reviewer also repairs stale PR
 branches with a clean rebase on `origin/main` before approval.
 
+Reusable role worktrees are cache, not authority. Agentry refreshes a clean
+role worktree before each spawn: issue and schedule-driven roles detach to the
+current target base, while PR-triggered roles fetch `refs/pull/<number>/head`
+and detach to the selected PR head. Dirty worktrees are still skipped so partial
+agent output is never discarded silently.
+
 When multiple PRs touch files listed in `merge_sensitive_paths`, Reviewer runs a
 simple merge train. The oldest matching PR can proceed. Newer matching PRs get
 `merge-train-waiting`, drop `ready-for-review`, and retry after the older PR

@@ -134,6 +134,11 @@ before reuse. A dirty `agentry/worktrees/<role>` directory is skipped until its
 leftover repo changes are committed, moved, or removed, which keeps one issue's
 partial work out of the next issue's branch.
 
+Clean role worktrees are refreshed before each run. Issue and schedule-driven
+roles detach to the current target base, normally `origin/main`; PR-triggered
+roles detach to the selected pull request head from `refs/pull/<number>/head`.
+That keeps local file reads aligned with the queue item the role is processing.
+
 ## Upgrade
 
 The start scripts install Agentry from the Git ref pinned in the script. To
@@ -143,7 +148,7 @@ running Agentry process that uses this venv, and rerun the wrapper with
 force-reinstalling, so `status`, `doctor`, `configure`, and `gui` are safe to
 run while Agentry is live.
 
-Prefer release tags such as `v0.1.2` for stable target repos. Use raw commits
+Prefer release tags such as `v0.1.4` for stable target repos. Use raw commits
 only for short-lived platform fix testing before the next release is cut.
 
 ## Remove

@@ -31,6 +31,14 @@ class WorkCandidate:
     checks: str | None = None
 
 
+@dataclass(frozen=True)
+class SelectedPullRequest:
+    """The PR selected for a PR-triggered role run."""
+
+    number: int
+    head_ref_name: str | None = None
+
+
 def work_packet_path(target_path: Path | str, role: str) -> Path:
     """Return the packet path for ``role`` in the target's local state."""
     return target_state_dir(target_path) / "workpackets" / f"{_safe_name(role)}.md"
@@ -54,6 +62,35 @@ def write_role_work_packet(
     text = _build_packet(target_path, target_config, role, cfg)
     _write_capped(path, text, max_bytes=target_config.context.max_packet_bytes)
     return path
+
+
+def selected_pr_for_role(
+    target_config: TargetConfig,
+    cfg: AgentConfig,
+) -> SelectedPullRequest | None:
+    """Return the selected PR, if this role is about to process a PR.
+
+    This mirrors the deterministic work-packet candidate selection so the
+    orchestrator can prepare the isolated worktree at the same PR head the
+    packet asks the role to process.
+    """
+    trigger = cfg.trigger
+    if trigger is None or not trigger.pr_labels:
+        return None
+
+    selected = _select_candidate(_candidate_groups(target_config, cfg), cfg)
+    if selected is None or selected.kind != "pr":
+        return None
+
+    number = selected.item.get("number")
+    if not isinstance(number, int):
+        return None
+
+    head = selected.item.get("headRefName")
+    return SelectedPullRequest(
+        number=number,
+        head_ref_name=head if isinstance(head, str) else None,
+    )
 
 
 def _build_packet(
@@ -321,4 +358,9 @@ def _safe_name(value: str) -> str:
     return re.sub(r"[^A-Za-z0-9_.-]+", "-", value).strip("-") or "role"
 
 
-__all__ = ["work_packet_path", "write_role_work_packet"]
+__all__ = [
+    "SelectedPullRequest",
+    "selected_pr_for_role",
+    "work_packet_path",
+    "write_role_work_packet",
+]

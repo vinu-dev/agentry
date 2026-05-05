@@ -101,6 +101,8 @@ from an existing dirty worktree. Uncommitted or untracked repo changes are
 reported as a worktree preparation error so an interrupted run cannot leak
 partial work into the next issue or PR. The operator should commit, move, or
 remove those leftovers, then let the role retry on its normal interval.
+Clean worktrees are refreshed before a role starts; PR roles inspect the
+selected PR head, and issue/scheduled roles start from the current target base.
 
 ## Check-Ins and Limits
 

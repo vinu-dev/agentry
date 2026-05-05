@@ -99,6 +99,9 @@ Each allowed role is a lightweight scheduler loop:
    Existing isolated worktrees must be clean (`git status --porcelain` empty)
    before a role is spawned; dirty worktrees are skipped as preparation errors
    so partial changes cannot cross issue or PR boundaries.
+   Clean worktrees are refreshed before spawn: PR-triggered roles detach to the
+   selected PR head fetched from `refs/pull/<number>/head`, and other roles
+   detach to the current target base, normally `origin/main`.
 4. Write a bounded work packet under `agentry/state/workpackets/<role>.md`.
 5. Build the role prompt from `agentry/config.yml` and inject the absolute work
    packet path.
@@ -120,6 +123,9 @@ For standard feature-branch validation, role prompts reset clean local feature
 branches from their matching `origin/feature/...` ref before rebasing. This keeps
 the orchestrator's reusable worktree optimization from turning a stale local
 branch into a false merge-conflict report.
+The orchestrator also refreshes clean reusable role worktrees before each model
+spawn, so PR reviewers see the selected PR files and issue roles start from the
+latest base after earlier merges.
 Reviewer also repairs stale `ready-for-review` branches with a clean rebase on
 `origin/main` before reviewing. Only real rebase conflicts leave the PR queue and
 receive `merge-conflict`.

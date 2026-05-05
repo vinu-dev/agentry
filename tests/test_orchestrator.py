@@ -30,6 +30,7 @@ from agentry.orchestrator import (
     _usage_limit_backoff_seconds,
 )
 from agentry.session import read_session
+from agentry.workpacket import SelectedPullRequest
 
 
 def _make_orchestrator(
@@ -542,3 +543,112 @@ def test_role_cwd_returns_none_when_existing_worktree_is_dirty(tmp_path: Path):
 
     assert not _is_git_worktree_clean(worktree)
     assert orch._role_cwd("implementer") is None
+
+
+def test_role_cwd_refreshes_existing_worktree_to_origin_main(tmp_path: Path):
+    remote, target = _make_remote_backed_repo(tmp_path)
+    (target / "README.md").write_text("initial\n", encoding="utf-8")
+    _git(target, "add", "README.md")
+    _git(target, "commit", "-m", "initial")
+    _git(target, "push", "-u", "origin", "main")
+
+    orch = Orchestrator(
+        target_config=_target_config_with_role("reviewer"),
+        target_path=target,
+        notifier=DiscordNotifier(webhook_url=None),
+    )
+    worktree = orch._role_cwd("reviewer")
+    assert worktree is not None
+    assert not (worktree / "new.txt").exists()
+
+    (target / "new.txt").write_text("from main\n", encoding="utf-8")
+    _git(target, "add", "new.txt")
+    _git(target, "commit", "-m", "advance main")
+    _git(target, "push", "origin", "main")
+
+    refreshed = orch._role_cwd("reviewer")
+
+    assert refreshed == worktree
+    assert (worktree / "new.txt").read_text(encoding="utf-8") == "from main\n"
+    assert _git_output(worktree, "rev-parse", "--abbrev-ref", "HEAD") == "HEAD"
+    assert remote.exists()
+
+
+def test_role_cwd_checks_out_selected_pr_head(tmp_path: Path):
+    _, target = _make_remote_backed_repo(tmp_path)
+    (target / "README.md").write_text("main\n", encoding="utf-8")
+    _git(target, "add", "README.md")
+    _git(target, "commit", "-m", "initial")
+    _git(target, "push", "-u", "origin", "main")
+
+    _git(target, "switch", "-c", "feature/pr-doc")
+    (target / "pr.txt").write_text("from pr\n", encoding="utf-8")
+    _git(target, "add", "pr.txt")
+    _git(target, "commit", "-m", "pr change")
+    pr_head = _git_output(target, "rev-parse", "HEAD")
+    _git(target, "push", "origin", "feature/pr-doc")
+    _git(target, "push", "origin", f"{pr_head}:refs/pull/7/head")
+    _git(target, "switch", "main")
+
+    orch = Orchestrator(
+        target_config=_target_config_with_role("regulatory_reviewer"),
+        target_path=target,
+        notifier=DiscordNotifier(webhook_url=None),
+    )
+
+    worktree = orch._role_cwd(
+        "regulatory_reviewer",
+        selected_pr=SelectedPullRequest(number=7, head_ref_name="feature/pr-doc"),
+    )
+
+    assert worktree is not None
+    assert (worktree / "pr.txt").read_text(encoding="utf-8") == "from pr\n"
+    assert _git_output(worktree, "rev-parse", "HEAD") == pr_head
+    assert _git_output(worktree, "rev-parse", "--abbrev-ref", "HEAD") == "HEAD"
+
+
+def _make_remote_backed_repo(tmp_path: Path) -> tuple[Path, Path]:
+    remote = tmp_path / "remote.git"
+    target = tmp_path / "target"
+    _git(tmp_path, "init", "--bare", str(remote))
+    _git(tmp_path, "clone", str(remote), str(target))
+    _git(target, "switch", "-c", "main")
+    _git(target, "config", "user.email", "test@example.com")
+    _git(target, "config", "user.name", "Agentry Test")
+    return remote, target
+
+
+def _target_config_with_role(role: str) -> TargetConfig:
+    return TargetConfig(
+        target_repo="test/repo",
+        agents={
+            role: AgentConfig(
+                cli=sys.executable,
+                args=[],
+                interval_min=60,
+                total_min=1,
+                stall_min=1,
+            )
+        },
+    )
+
+
+def _git(cwd: Path, *args: str) -> None:
+    subprocess.run(
+        ["git", *args],
+        cwd=cwd,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+
+def _git_output(cwd: Path, *args: str) -> str:
+    result = subprocess.run(
+        ["git", *args],
+        cwd=cwd,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return result.stdout.strip()
