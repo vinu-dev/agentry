@@ -11,7 +11,8 @@
 #
 # Flags (env vars):
 #   AGENTRY_FORCE=1     overwrite existing files in agentry/ and docs/ai/roles/
-#   AGENTRY_BRANCH=foo  fetch templates from a non-main branch (default: main)
+#   AGENTRY_BRANCH=foo  fetch templates from a branch, tag, or commit
+#                       (default: main; use release tags such as v0.1.0)
 
 set -euo pipefail
 

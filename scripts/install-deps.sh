@@ -160,6 +160,10 @@ Next:
 
          curl -fsSL https://raw.githubusercontent.com/vinu-dev/agentry/main/scripts/add-to-target.sh | bash
 
+     For a pinned release setup:
+
+         curl -fsSL https://raw.githubusercontent.com/vinu-dev/agentry/v0.1.0/scripts/add-to-target.sh | AGENTRY_BRANCH=v0.1.0 bash
+
   3. Configure or inspect the target without starting agents:
 
          ./agentry/start.sh gui --target .

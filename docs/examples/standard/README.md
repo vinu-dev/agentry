@@ -60,9 +60,13 @@ The example mirrors the target-repo layout created by
 From inside a real target repo, prefer the installer scripts instead of copying
 this example by hand:
 
+Windows PowerShell:
+
 ```powershell
 iwr -useb https://raw.githubusercontent.com/vinu-dev/agentry/main/scripts/add-to-target.ps1 | iex
 ```
+
+Linux shell:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/vinu-dev/agentry/main/scripts/add-to-target.sh | bash
@@ -77,6 +81,14 @@ Then:
 4. Edit `docs/ai/roles/*.md` with project-specific rules.
 5. Run `agentry/start.ps1` or `./agentry/start.sh` when you want agents active.
 
+The generated start scripts pin Agentry to the selected branch, tag, or commit
+at install time. Prefer a release tag such as `v0.1.0` for stable target repos.
+On Linux, that looks like:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/vinu-dev/agentry/v0.1.0/scripts/add-to-target.sh | AGENTRY_BRANCH=v0.1.0 bash
+```
+
 ## Model Defaults
 
 The standard config uses portable `npx` commands and optimized Codex model
@@ -87,6 +99,12 @@ tiers:
 
 Targets can replace any role with Claude Code, local Llama/Ollama, or wrapper
 scripts by changing that role's `cli` and `args`.
+
+## Merge-Sensitive Paths
+
+Set `merge_sensitive_paths` in `agentry/config.yml` for generated docs, release
+files, workflows, or other high-conflict files. Reviewer processes the oldest
+matching PR first and parks newer matching PRs with `merge-train-waiting`.
 
 ## How To Extend
 

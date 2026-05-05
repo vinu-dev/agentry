@@ -44,9 +44,13 @@ merge.
 
 Run once per machine:
 
+Windows PowerShell:
+
 ```powershell
 iwr -useb https://raw.githubusercontent.com/vinu-dev/agentry/main/scripts/install-deps.ps1 | iex
 ```
+
+Linux shell:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/vinu-dev/agentry/main/scripts/install-deps.sh | bash
@@ -118,6 +122,9 @@ running Agentry process that uses this venv, and rerun the wrapper with
 `AGENTRY_FORCE_INSTALL=1`. Wrapper subcommands reuse an existing venv without
 force-reinstalling, so `status`, `doctor`, `configure`, and `gui` are safe to
 run while Agentry is live.
+
+Prefer release tags such as `v0.1.0` for stable target repos. Use raw commits
+only for short-lived platform fix testing before the next release is cut.
 
 ## Remove
 

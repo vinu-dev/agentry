@@ -15,6 +15,7 @@ starts it again with the target repo's `agentry/start.ps1` or `agentry/start.sh`
 - Work on Windows and Linux with the same target config.
 - Survive crashes, reboots, stale state files, missing CLIs, and exhausted model
   limits without silently spinning.
+- Keep wrapper status/config commands safe while Agentry is live.
 
 ## Run Modes
 
@@ -156,6 +157,11 @@ The dashboard listens on `127.0.0.1:4783` by default. It shows:
 
 The GUI writes `agentry/config.yml` using the same helper as the CLI wizard.
 
+Wrapper commands are safe entry points for operators. If the target venv exists
+but the recorded install ref is stale, `status`, `doctor`, `configure`, and
+`gui` reuse the existing venv and warn instead of reinstalling. Reinstalling
+requires `AGENTRY_FORCE_INSTALL=1`, and operators should stop Agentry first.
+
 ## Self-Sustaining Flow
 
 Agentry does not need a separate "brain" to decide the next stage. GitHub is the
@@ -202,3 +208,5 @@ continue through CI and review.
 | Model limit is exhausted | Usage-limit logs trigger a backoff until the reset time or a four-hour fallback. |
 | Token use is high | Role session records budget exceeded; status/dashboard show it for tuning. |
 | Local LLM or wrapper does not support check-ins | It still runs under legacy stdout/timeout supervision. |
+| Start-script pin changed while Agentry is live | Wrapper subcommands warn and reuse the existing venv; force refresh only after stopping Agentry. |
+| Several PRs touch shared generated docs | Reviewer parks newer PRs with `merge-train-waiting` until older merge-sensitive PRs merge and they can rebase. |

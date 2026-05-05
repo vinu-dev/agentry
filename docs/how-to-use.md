@@ -7,17 +7,17 @@ service installer, `agentry init`, or `agentry target add` command.
 
 ---
 
-## TL;DR
+## TL;DR - New Repo Setup
 
 ### 1. Install machine dependencies once
 
-Windows:
+Windows PowerShell:
 
 ```powershell
 iwr -useb https://raw.githubusercontent.com/vinu-dev/agentry/main/scripts/install-deps.ps1 | iex
 ```
 
-Linux:
+Linux shell:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/vinu-dev/agentry/main/scripts/install-deps.sh | bash
@@ -34,16 +34,32 @@ codex login
 
 Run this from inside the target repository:
 
-Windows:
+Windows PowerShell:
 
 ```powershell
 iwr -useb https://raw.githubusercontent.com/vinu-dev/agentry/main/scripts/add-to-target.ps1 | iex
 ```
 
-Linux:
+Linux shell:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/vinu-dev/agentry/main/scripts/add-to-target.sh | bash
+```
+
+To install from an exact release tag instead of `main`:
+
+Windows PowerShell:
+
+```powershell
+$script = Join-Path $env:TEMP "add-to-target.ps1"
+iwr -useb https://raw.githubusercontent.com/vinu-dev/agentry/v0.1.0/scripts/add-to-target.ps1 -OutFile $script
+powershell -NoProfile -ExecutionPolicy Bypass -File $script -Branch v0.1.0
+```
+
+Linux shell:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/vinu-dev/agentry/v0.1.0/scripts/add-to-target.sh | AGENTRY_BRANCH=v0.1.0 bash
 ```
 
 This writes:
@@ -88,6 +104,10 @@ $EDITOR agentry/.env
 
 Set `GITHUB_TOKEN` at minimum. `DISCORD_WEBHOOK_URL`, `ANTHROPIC_API_KEY`, and
 `OPENAI_API_KEY` are optional.
+
+If you prefer GitHub CLI auth for local supervised runs, `gh auth status` must
+work for the target repo. For unattended operation, use a repo-scoped
+`GITHUB_TOKEN`.
 
 Use the configuration wizard or dashboard to choose run mode, model profile,
 and which roles are allowed to run:
@@ -155,6 +175,28 @@ The doctor checks:
 - `GITHUB_TOKEN` is set
 - `gh` can reach the configured target repo, when `gh` is installed
 
+After the first successful doctor run, commit the generated target files:
+
+```text
+agentry/config.yml
+agentry/start.ps1
+agentry/start.sh
+agentry/.env.example
+agentry/.gitignore
+agentry/README.md
+docs/ai/roles/*.md
+```
+
+Do not commit:
+
+```text
+agentry/.env
+agentry/.venv/
+agentry/logs/
+agentry/state/
+agentry/worktrees/
+```
+
 ### 5. Start
 
 Windows:
@@ -184,6 +226,44 @@ and set `AGENTRY_FORCE_INSTALL=1` for that wrapper invocation.
 Agentry runs in the foreground. Press Ctrl-C or close the terminal to stop it.
 Rebooting the computer stops it too; there is no background service unless you
 create one yourself.
+
+---
+
+## Upgrade An Existing Target
+
+Target repositories should pin a released Agentry tag or commit. To upgrade:
+
+1. Stop Agentry for that target.
+2. Update the pinned ref in both start scripts.
+3. Commit the pin update and any target-specific config changes.
+4. Refresh the local venv intentionally.
+
+Windows:
+
+```powershell
+$env:AGENTRY_FORCE_INSTALL = "1"
+.\agentry\start.ps1 status --target .
+Remove-Item Env:\AGENTRY_FORCE_INSTALL
+```
+
+Linux:
+
+```bash
+AGENTRY_FORCE_INSTALL=1 ./agentry/start.sh status --target .
+```
+
+Then run doctor through the wrapper:
+
+```powershell
+.\agentry\start.ps1 doctor --target . --init-labels
+```
+
+```bash
+./agentry/start.sh doctor --target . --init-labels
+```
+
+Use a release tag such as `v0.1.0` for normal upgrades. Use a raw commit only
+when deliberately testing an unreleased platform fix.
 
 ---
 

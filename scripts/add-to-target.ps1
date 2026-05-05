@@ -37,7 +37,8 @@
     Overwrite existing files in agentry/ and docs/ai/roles/.
 
 .PARAMETER Branch
-    Branch of the agentry repo to fetch templates from (default: main).
+    Branch, tag, or commit of the agentry repo to fetch templates from
+    (default: main). Use a release tag such as v0.1.0 for stable setup.
 #>
 
 [CmdletBinding()]
