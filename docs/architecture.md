@@ -83,6 +83,9 @@ For standard feature-branch validation, role prompts reset clean local feature
 branches from their matching `origin/feature/...` ref before rebasing. This keeps
 the orchestrator's reusable worktree optimization from turning a stale local
 branch into a false merge-conflict report.
+Reviewer also repairs stale `ready-for-review` branches with a clean rebase on
+`origin/main` before reviewing. Only real rebase conflicts leave the PR queue and
+receive `merge-conflict`.
 
 ## GitHub As The Queue
 
