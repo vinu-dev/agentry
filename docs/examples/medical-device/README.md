@@ -7,6 +7,11 @@ It is documentation and starter material, not a regulatory template. Copy the
 pattern into a real target repo, then adapt it to your Quality Management
 System, Design History File, risk process, and validation evidence.
 
+For regulated targets, start from a released Agentry tag such as `v0.1.0` and
+pin that tag in the generated start scripts. Add controlled documents,
+generated traceability files, release files, and risk/security records to
+`merge_sensitive_paths` so overlapping PRs move through review one at a time.
+
 ## Why An Extended Roster
 
 Medical device software has more gates than a typical hobby project:

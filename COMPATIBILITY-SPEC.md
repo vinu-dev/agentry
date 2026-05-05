@@ -86,6 +86,10 @@ agents:
 sensitive_paths:
   - "**/auth/**"
   - "**/.github/workflows/**"
+
+merge_sensitive_paths:
+  - "docs/traceability/**"
+  - ".github/workflows/**"
 ```
 
 Required top-level fields:
@@ -104,6 +108,10 @@ Optional top-level fields:
 - `research`: controls whether Researcher may create new GitHub issues.
 - `labels`: target-specific label names to create with `doctor --init-labels`.
 - `sensitive_paths`: policy globs for role rule files to consult.
+- `merge_sensitive_paths`: high-conflict shared paths that Reviewer should
+  serialize with the merge train. The oldest matching PR can proceed; newer
+  matching PRs receive `merge-train-waiting` until they can rebase after the
+  older PR merges.
 
 Required per-role fields:
 
@@ -242,6 +250,11 @@ AGENTRY_INSTALL_REF=<branch-tag-or-commit> ./agentry/start.sh
 After changing the install ref, delete `agentry/.venv/` and rerun the start
 script to recreate the environment.
 
+For an intentional refresh without deleting the venv, stop Agentry and run the
+wrapper with `AGENTRY_FORCE_INSTALL=1`. Wrapper subcommands without that flag
+reuse the existing venv and warn when the install-ref marker is stale, which
+keeps `status`, `doctor`, `configure`, and `gui` safe while Agentry is live.
+
 ## 8. Runtime Logs And State
 
 Agentry writes subprocess logs to:
@@ -295,6 +308,8 @@ Agentry supports Windows and Linux.
 - Use `agentry/start.sh` on Linux.
 - CLI names are resolved with npm shim fallbacks, so `npx`/`npx.cmd` and similar
   copied configs work across platforms.
+- Use the generated wrapper scripts for target-local commands when possible;
+  they select the repo-local venv and avoid shell-specific command differences.
 - Hardware or OS-specific tools belong in project role files and target setup,
   not in Agentry core.
 

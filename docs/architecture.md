@@ -33,6 +33,9 @@ target-repo/
 The machine only needs Python, Node.js, the selected LLM CLIs, Git, and GitHub
 auth. The target repo owns the project-specific rules.
 
+For product and workflow design principles, see [design.md](design.md). This
+file focuses on the runtime architecture.
+
 ## Core Components
 
 | Module | Responsibility |
@@ -60,6 +63,28 @@ allowed.
 
 This makes the "create new work" switch explicit. A target can keep Agentry
 running on existing tickets without letting it grow the backlog.
+
+## Design Boundaries
+
+Agentry core deliberately owns a narrow set of responsibilities:
+
+- start and supervise configured role CLIs
+- keep one active session per role
+- expose local status, stop, doctor, configure, and dashboard controls
+- provide standard prompts and labels for a common software workflow
+- keep target installs reproducible through pinned refs
+
+Target repositories own project policy:
+
+- role-specific engineering rules
+- validation commands
+- hardware setup
+- release criteria
+- security and compliance review rules
+- which paths are sensitive or merge-sensitive
+
+This boundary keeps framework fixes reusable without turning Agentry into a
+large domain-specific automation system.
 
 ## Role Loop
 
@@ -256,6 +281,10 @@ Wrapper subcommands such as `status`, `doctor`, `configure`, and `gui` reuse an
 existing repo-local venv even when the install-ref marker is missing or stale.
 They do not force-reinstall into a live venv. Intentional refreshes require the
 operator to stop Agentry and run the wrapper with `AGENTRY_FORCE_INSTALL=1`.
+
+Agentry software releases are GitHub tags/releases. A normal target setup pins a
+tag, for example `v0.1.0`; an emergency integration fix may temporarily pin a
+commit until the next release is cut. See [release.md](release.md).
 
 ## Extension Model
 

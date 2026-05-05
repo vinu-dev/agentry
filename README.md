@@ -13,6 +13,13 @@ labels are the queue, role rules define the work, session state prevents
 duplicate token burn, and the dashboard lets the operator see and stop what is
 happening.
 
+## Current Release
+
+The first supported alpha release is `v0.1.0`. Agentry is distributed from
+GitHub releases and Git refs. Target repositories pin a specific Agentry tag or
+commit in their generated `agentry/start.ps1` and `agentry/start.sh`, so a
+working target does not silently drift when Agentry `main` changes.
+
 ## How It Is Used
 
 Agentry is a dependency you pull into each target repo, not a system service.
@@ -46,13 +53,21 @@ your-target-repo/
 
 Role rule files live in `docs/ai/roles/<role>.md`, not inside `agentry/`.
 
-## Setup
+## New Repository Setup
+
+There are two setup steps: once per machine, then once per target repo.
+
+### 1. Install machine dependencies once
 
 Install machine dependencies once:
+
+Windows PowerShell:
 
 ```powershell
 iwr -useb https://raw.githubusercontent.com/vinu-dev/agentry/main/scripts/install-deps.ps1 | iex
 ```
+
+Linux shell:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/vinu-dev/agentry/main/scripts/install-deps.sh | bash
@@ -65,23 +80,50 @@ claude login
 codex login
 ```
 
+### 2. Add Agentry to the target repo
+
 Add Agentry to a target repo:
+
+Windows PowerShell:
 
 ```powershell
 cd C:\projects\rpi-home-monitor
 iwr -useb https://raw.githubusercontent.com/vinu-dev/agentry/main/scripts/add-to-target.ps1 | iex
 ```
 
+Linux shell:
+
 ```bash
 cd ~/projects/rpi-home-monitor
 curl -fsSL https://raw.githubusercontent.com/vinu-dev/agentry/main/scripts/add-to-target.sh | bash
 ```
 
+For an exact released setup, fetch the release tag instead of `main`, or pass
+the release tag to the installer. Example:
+
+```powershell
+cd C:\projects\rpi-home-monitor
+$script = Join-Path $env:TEMP "add-to-target.ps1"
+iwr -useb https://raw.githubusercontent.com/vinu-dev/agentry/v0.1.0/scripts/add-to-target.ps1 -OutFile $script
+powershell -NoProfile -ExecutionPolicy Bypass -File $script -Branch v0.1.0
+```
+
+```bash
+cd ~/projects/rpi-home-monitor
+curl -fsSL https://raw.githubusercontent.com/vinu-dev/agentry/v0.1.0/scripts/add-to-target.sh | AGENTRY_BRANCH=v0.1.0 bash
+```
+
 Then:
 
-1. Copy `agentry/.env.example` to `agentry/.env` and fill `GITHUB_TOKEN`.
-2. Run the GUI or edit `agentry/config.yml`.
-3. Edit `docs/ai/roles/*.md` for project-specific rules.
+1. Copy `agentry/.env.example` to `agentry/.env`.
+2. Set `GITHUB_TOKEN`, or ensure `gh auth status` works for the target repo.
+3. Run `doctor --init-labels` once to create standard labels.
+4. Run the GUI or edit `agentry/config.yml`.
+5. Edit `docs/ai/roles/*.md` for project-specific rules.
+6. Commit `agentry/config.yml`, `agentry/start.ps1`, `agentry/start.sh`,
+   `agentry/.env.example`, `agentry/.gitignore`, `agentry/README.md`, and
+   `docs/ai/roles/*.md`. Do not commit `.env`, `.venv`, logs, state, or
+   worktrees.
 
 ## Configure Without Starting Agents
 
@@ -166,6 +208,33 @@ When Tester opens a PR, the bundled prompt writes the multi-line PR body to a
 temporary file and calls `gh pr create --body-file`. That avoids shell-specific
 quoting failures on Windows and keeps validation evidence readable.
 
+## Upgrade A Target Repo
+
+To upgrade a target to a released Agentry version:
+
+1. Stop Agentry for that target repo.
+2. Update the pinned ref in `agentry/start.ps1` and `agentry/start.sh` to the
+   release tag or commit.
+3. Commit the pin update in the target repo.
+4. Refresh the target venv intentionally:
+
+Windows:
+
+```powershell
+$env:AGENTRY_FORCE_INSTALL = "1"
+.\agentry\start.ps1 status --target .
+Remove-Item Env:\AGENTRY_FORCE_INSTALL
+```
+
+Linux:
+
+```bash
+AGENTRY_FORCE_INSTALL=1 ./agentry/start.sh status --target .
+```
+
+Wrapper subcommands without `AGENTRY_FORCE_INSTALL=1` are safe health checks:
+they reuse the existing venv instead of reinstalling into a live supervisor.
+
 ## Per-Role Model Assignment
 
 Each role can use a different model or provider:
@@ -227,8 +296,11 @@ See [LICENSE](LICENSE).
 ## More
 
 - [docs/architecture.md](docs/architecture.md) - design and architecture
+- [docs/design.md](docs/design.md) - product and workflow design principles
 - [docs/how-to-use.md](docs/how-to-use.md) - operator guide
+- [docs/release.md](docs/release.md) - Agentry release process
 - [docs/watchdog-and-dashboard.md](docs/watchdog-and-dashboard.md) - watchdog, stop, crash recovery, and GUI design
+- [CHANGELOG.md](CHANGELOG.md) - release history
 - [COMPATIBILITY-SPEC.md](COMPATIBILITY-SPEC.md) - target repo contract
 - [docs/examples/standard/](docs/examples/standard/) - standard six-role example
 - [docs/examples/medical-device/](docs/examples/medical-device/) - extended regulated-software example

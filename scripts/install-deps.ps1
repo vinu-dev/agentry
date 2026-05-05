@@ -182,6 +182,9 @@ Next:
 
          iwr -useb https://raw.githubusercontent.com/vinu-dev/agentry/main/scripts/add-to-target.ps1 | iex
 
+     For a pinned release setup, download the release tag's add-to-target.ps1
+     and run it with -Branch v0.1.0.
+
   3. Configure or inspect the target without starting agents:
 
          .\agentry\start.ps1 gui --target .
