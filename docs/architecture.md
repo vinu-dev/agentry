@@ -161,7 +161,9 @@ and reviewer actor are the same account.
 but must wait behind an older PR touching the same merge-sensitive path set.
 Tester PR creation uses a temporary PR body file plus `gh pr create
 --body-file`, so multi-line validation evidence is transported as a file instead
-of shell-quoted command text.
+of shell-quoted command text. Issue-owned PR bodies include a GitHub closing
+keyword (`Closes #<id>`) so merge completion closes the issue and removes the
+need for supervisor cleanup.
 
 ## Sessions And Watchdog State
 

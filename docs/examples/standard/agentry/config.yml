@@ -398,6 +398,9 @@ agents:
          docs/ai/roles/tester.md.
       5. Run the relevant rows. Skip any the host cannot run (e.g.,
          Yocto bitbake on Windows) and note skips in the PR body.
+         The PR body for an issue-owned branch must start with
+         `Closes #<id>` so GitHub closes the issue after merge; do not use
+         only "Linked issue" or another non-closing phrase.
       6. ALL GREEN:
            pr=$(gh pr list --head "feature/<id>-${slug}" --state open --json number --jq '.[0].number')
            if [ -z "$pr" ]; then

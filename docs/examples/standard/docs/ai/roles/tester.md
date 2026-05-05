@@ -18,7 +18,9 @@ issue only; otherwise pick the oldest matching issue.
    - Any project-specific hardware tests if `tester.md` includes them (see "Hardware" below)
 4. If all green:
    - Open a PR titled `[<id>] <issue-title>` from the implementer's branch to `main`
-   - PR body: link to issue, link to design doc, summary of changes
+   - PR body: start with `Closes #<id>`, then link to the design doc and
+     summarize changes, validation, and skips. Do not use only "Linked issue"
+     or another non-closing phrase.
    - Add label `ready-for-review` to the PR
    - On the issue: add `pr-open` and remove `ready-for-test` (the PR now owns
      the lifecycle)

@@ -2,6 +2,22 @@
 
 All notable Agentry release changes are recorded here.
 
+## v0.1.3 - 2026-05-05
+
+Issue-closing PR body release.
+
+### Changed
+
+- Runtime and Tester prompt contracts now require issue-owned PR bodies to use
+  a GitHub closing keyword such as `Closes #<id>`.
+- Standard defaults and example docs explain that `pr-open` remains only while
+  the PR is alive; GitHub should close the issue automatically on merge.
+
+### Notes
+
+- This prevents merged PRs from leaving their issues open when a role writes
+  "Linked issue" instead of a closing keyword.
+
 ## v0.1.2 - 2026-05-05
 
 Selected-candidate queue-discipline release.

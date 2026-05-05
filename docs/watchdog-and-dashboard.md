@@ -209,7 +209,9 @@ checks do not spawn a Reviewer. `green` is stricter and waits for passing or
 absent checks. Unknown check state is treated as runnable to avoid deadlocking
 the queue on a transient GitHub CLI/API failure.
 `pr-open` is kept on the issue while the PR is alive, so the issue does not look
-idle after the Tester removes `ready-for-test`.
+idle after the Tester removes `ready-for-test`. Tester-created PR bodies use a
+closing keyword such as `Closes #<id>`, so GitHub closes the linked issue when
+the PR merges.
 For reviewer outcomes, the default workflow records deterministic PR comments
 that begin `Agentry review outcome:` and pairs them with labels such as
 `agent-approved`, `blocked`, or `changes-requested`. It avoids formal

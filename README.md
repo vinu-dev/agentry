@@ -246,7 +246,9 @@ triggers.
 
 When Tester opens a PR, the bundled prompt writes the multi-line PR body to a
 temporary file and calls `gh pr create --body-file`. That avoids shell-specific
-quoting failures on Windows and keeps validation evidence readable.
+quoting failures on Windows and keeps validation evidence readable. The body
+must include a GitHub closing keyword such as `Closes #<issue-number>` so the
+issue closes automatically after merge instead of lingering with `pr-open`.
 
 ## Upgrade A Target Repo
 
