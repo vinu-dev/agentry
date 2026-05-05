@@ -152,6 +152,9 @@ The standard pipeline prompts also treat clean local feature branches as cache,
 not authority: Implementer retry paths and Tester reset the local feature branch
 to `origin/feature/<id>-<slug>` before rebasing. That keeps force-pushed or
 supervisor-rebased branches from being misreported as merge conflicts.
+Reviewer follows the same rule for stale PRs: if a `ready-for-review` branch is
+behind `origin/main`, it attempts a clean rebase and push before reviewing, and
+only labels `merge-conflict` when the rebase genuinely conflicts.
 
 When Tester opens a PR, the bundled prompt writes the multi-line PR body to a
 temporary file and calls `gh pr create --body-file`. That avoids shell-specific

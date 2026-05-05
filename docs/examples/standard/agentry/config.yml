@@ -483,11 +483,19 @@ agents:
            cat agentry/logs/issues/<id>-<slug>/architect.log
            cat agentry/logs/issues/<id>-<slug>/implementer.log
            cat agentry/logs/issues/<id>-<slug>/tester.log
-      4. Verify the PR is rebased on origin/main:
+      4. Verify the PR is rebased on origin/main, and repair simple stale
+         branches before review:
            git fetch origin
-           commits_behind=$(git rev-list --count "origin/feature/<id>-${slug}..origin/main")
-         If commits_behind > 0 → label `needs-rebase`, remove ready-for-review,
-         comment "rebase required". Exit 0.
+           commits_behind=$(git rev-list --count "origin/${headRefName}..origin/main")
+         If commits_behind > 0:
+           git switch <headRefName>
+           git rebase origin/main
+           git push --force-with-lease origin <headRefName>
+         If the rebase conflicts, abort the rebase, add `merge-conflict`,
+         remove `ready-for-review` and `needs-rebase`, comment with the
+         conflicted files, and exit 0. If the rebase succeeds, remove
+         `needs-rebase`, keep `ready-for-review`, append a concise reviewer
+         log entry, and exit 0 so CI can rerun on the updated head.
       5. Check CI status:
            gh pr checks <n> --json name,state,bucket
          If checks are pending, queued, or in progress, append a concise
