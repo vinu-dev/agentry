@@ -14,7 +14,7 @@ Each target repo gets its own copy.
 | `.env` | Real secrets | no |
 | `.venv/` | Repo-local Agentry Python venv | no |
 | `logs/` | Per-role stdout logs | no |
-| `state/` | Runtime sessions and role continuity notes | no |
+| `state/` | Runtime sessions, work packets, and role continuity notes | no |
 | `worktrees/` | Per-role git worktrees when enabled | no |
 
 ## Role Rules
@@ -39,6 +39,24 @@ release files, add those globs to `merge_sensitive_paths` in
 `agentry/config.yml`. Reviewer will approve the oldest matching PR and park
 newer ones with `merge-train-waiting` until they can rebase after the older
 merge.
+
+To reduce token burn, keep the `context` block enabled. Agentry writes bounded
+work packets under `agentry/state/workpackets/` before role spawn, and the
+standard Reviewer waits for PR checks to settle before launching:
+
+```yaml
+context:
+  work_packets: true
+  max_packet_bytes: 32000
+
+agents:
+  reviewer:
+    trigger:
+      pr_labels: ["ready-for-review", "merge-train-waiting"]
+      pr_check_gate: settled
+```
+
+Work packets are local runtime files and should not be committed.
 
 ## Machine Setup
 
@@ -123,7 +141,7 @@ running Agentry process that uses this venv, and rerun the wrapper with
 force-reinstalling, so `status`, `doctor`, `configure`, and `gui` are safe to
 run while Agentry is live.
 
-Prefer release tags such as `v0.1.0` for stable target repos. Use raw commits
+Prefer release tags such as `v0.1.1` for stable target repos. Use raw commits
 only for short-lived platform fix testing before the next release is cut.
 
 ## Remove

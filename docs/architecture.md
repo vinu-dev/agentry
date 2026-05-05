@@ -48,6 +48,7 @@ file focuses on the runtime architecture.
 | `supervisor.py` | Spawns LLM CLIs, watches stdout, handles timeouts/check-ins, and treats fresh stream-JSON tool activity as progress |
 | `session.py` | Writes session JSON, detects stale sessions, stops process trees |
 | `github.py` | Cheap GitHub label/PR checks and label initialization |
+| `workpacket.py` | Writes bounded per-run role context before LLM spawn |
 | `notify.py` | Optional Discord lifecycle notifications |
 
 ## Run Modes
@@ -92,17 +93,27 @@ Each allowed role is a lightweight scheduler loop:
 
 1. Check for an active local session for that role.
 2. Check cheap GitHub triggers, such as open issues or PRs with matching labels.
+   PR-triggered roles can also use `trigger.pr_check_gate` to wait for checks
+   to settle or pass before spending a review run.
 3. Prepare the role working directory, usually a per-role git worktree.
    Existing isolated worktrees must be clean (`git status --porcelain` empty)
    before a role is spawned; dirty worktrees are skipped as preparation errors
    so partial changes cannot cross issue or PR boundaries.
-4. Build the role prompt from `agentry/config.yml`.
-5. Spawn the configured CLI and supervise it.
-6. Record session outcome, tokens, duration, and log path.
-7. Back off on model limit exhaustion when the reset time can be parsed.
-8. Sleep until the next interval.
+4. Write a bounded work packet under `agentry/state/workpackets/<role>.md`.
+5. Build the role prompt from `agentry/config.yml` and inject the absolute work
+   packet path.
+6. Spawn the configured CLI and supervise it.
+7. Record session outcome, tokens, duration, and log path.
+8. Back off on model limit exhaustion when the reset time can be parsed.
+9. Sleep until the next interval.
 
 If there is no matching GitHub work, no LLM process is started.
+
+Work packets are local runtime context, not durable workflow state. They contain
+the role's trigger labels, bounded GitHub candidate lists, recent session
+summaries, and context rules such as log-tail and diff-size guidance. They are
+byte-capped on disk so a noisy queue cannot inflate the next prompt. Roles treat
+the packet as a starting point and verify current truth with GitHub.
 
 For standard feature-branch validation, role prompts reset clean local feature
 branches from their matching `origin/feature/...` ref before rebasing. This keeps
@@ -157,9 +168,10 @@ Agentry writes one runtime session file per role:
 
 ```text
 agentry/state/sessions/<role>.json
+agentry/state/workpackets/<role>.md
 ```
 
-The file records:
+The session file records:
 
 - `state`: `running`, `completed`, `stale`, `stopped`, `blocked`, etc.
 - subprocess PID
@@ -176,6 +188,11 @@ session is marked `stale` and the role can run again.
 
 This is what makes restart recovery simple: after a reboot, old session files do
 not cause token burn and do not permanently block work.
+
+The work packet is overwritten for each role run. It is intentionally small and
+safe to delete. Its purpose is to prevent the next model invocation from
+rediscovering queue state, reading full historical logs, or loading a giant diff
+before it knows which files matter.
 
 ## Stop Behavior
 
@@ -242,6 +259,17 @@ agents:
     args: ["-p", "--dangerously-skip-permissions"]
 ```
 
+Reviewer-like roles can also use a PR check gate to avoid launching while all
+candidate PR checks are pending:
+
+```yaml
+agents:
+  reviewer:
+    trigger:
+      pr_labels: ["ready-for-review", "merge-train-waiting"]
+      pr_check_gate: settled
+```
+
 Agentry resolves common npm shims across Windows and Linux. A config that says
 `npx` can run as `npx.cmd` on Windows, and a copied Windows config that says
 `npx.cmd` can resolve to `npx` on Linux.
@@ -283,7 +311,7 @@ They do not force-reinstall into a live venv. Intentional refreshes require the
 operator to stop Agentry and run the wrapper with `AGENTRY_FORCE_INSTALL=1`.
 
 Agentry software releases are GitHub tags/releases. A normal target setup pins a
-tag, for example `v0.1.0`; an emergency integration fix may temporarily pin a
+tag, for example `v0.1.1`; an emergency integration fix may temporarily pin a
 commit until the next release is cut. See [release.md](release.md).
 
 ## Extension Model

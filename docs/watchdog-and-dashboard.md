@@ -16,6 +16,8 @@ starts it again with the target repo's `agentry/start.ps1` or `agentry/start.sh`
 - Survive crashes, reboots, stale state files, missing CLIs, and exhausted model
   limits without silently spinning.
 - Keep wrapper status/config commands safe while Agentry is live.
+- Prevent avoidable model launches by checking labels, PR check state, and
+  bounded work packets before spawning role CLIs.
 
 ## Run Modes
 
@@ -56,6 +58,18 @@ the role may run again.
 
 This handles normal crash/reboot recovery: old JSON files are harmless, and the
 next Agentry start cleans them up lazily.
+
+Before spawning a role, Agentry may also write a work packet:
+
+```text
+agentry/state/workpackets/<role>.md
+```
+
+The packet is overwritten each run and is safe to delete. It contains bounded
+GitHub candidates, trigger labels, recent session summaries, and context rules
+such as log-tail and diff-size guidance. The prompt receives the absolute packet
+path so the model starts from compact context rather than reading whole logs or
+performing broad discovery.
 
 ## Stop Safety
 
@@ -120,6 +134,11 @@ time, it backs that role off until after the reset instead of hammering the CLI.
 Each role also has a soft `token_budget`; exceeding it is recorded in the
 session and shown by status/dashboard.
 
+Token budgets are not kill triggers. Agentry reduces burn before spawn: no
+matching labels means no model process, `trigger.pr_check_gate` can wait for PR
+checks, and work packets cap the initial context. Once a role is running, normal
+timeout and check-in policy controls process lifetime.
+
 ## Cross-Platform CLI Resolution
 
 Configs can use portable command names like `npx`, `claude`, `codex`, or wrapper
@@ -183,6 +202,10 @@ flowchart LR
 Each role handles one item per run and updates GitHub. On the next scheduler
 tick, cheap label checks decide whether the next role should run. If there is no
 matching issue or PR, no LLM is spawned.
+PR-triggered roles can set `trigger.pr_check_gate: settled` so all-pending PR
+checks do not spawn a Reviewer. `green` is stricter and waits for passing or
+absent checks. Unknown check state is treated as runnable to avoid deadlocking
+the queue on a transient GitHub CLI/API failure.
 `pr-open` is kept on the issue while the PR is alive, so the issue does not look
 idle after the Tester removes `ready-for-test`.
 For reviewer outcomes, the default workflow records deterministic PR comments
@@ -204,9 +227,12 @@ continue through CI and review.
 | PID is reused after a crash | Completed/stale sessions are not killed by stop commands. |
 | CLI missing | `doctor` warns; runtime records `spawn-failed` and retries later. |
 | GitHub has no matching label | The cheap scheduler check skips the LLM run. |
+| PR checks are pending | Reviewer can skip before spawn when `pr_check_gate: settled` is configured. |
+| GitHub check lookup fails | The gate allows the role to run so the queue does not deadlock on a transient API/CLI failure. |
 | Researcher should not create work | Keep `mode: pipeline` or `manual`; Researcher is blocked even if enabled. |
 | Model limit is exhausted | Usage-limit logs trigger a backoff until the reset time or a four-hour fallback. |
 | Token use is high | Role session records budget exceeded; status/dashboard show it for tuning. |
+| Logs are huge | Role prompts use the work packet and bounded tails instead of full historical logs. |
 | Local LLM or wrapper does not support check-ins | It still runs under legacy stdout/timeout supervision. |
 | Start-script pin changed while Agentry is live | Wrapper subcommands warn and reuse the existing venv; force refresh only after stopping Agentry. |
 | Several PRs touch shared generated docs | Reviewer parks newer PRs with `merge-train-waiting` until older merge-sensitive PRs merge and they can rebase. |

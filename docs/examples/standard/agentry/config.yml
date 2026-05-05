@@ -28,6 +28,7 @@
 # Expensive LLM runs are gated by cheap scheduler checks:
 #   trigger.issue_labels -> run only when a matching open issue exists
 #   trigger.pr_labels    -> run only when a matching open PR exists
+#   trigger.pr_check_gate -> optionally wait for PR checks before spawning
 # Run mode defaults to pipeline: Agentry processes existing GitHub labels but
 # does not create new research issues unless the operator explicitly switches
 # to autonomous mode and enables researcher.
@@ -50,6 +51,13 @@ automation:
 research:
   allow_create_issues: false          # researcher off unless autonomous
   max_open_ready_for_design: 3
+
+context:
+  work_packets: true                  # write bounded context before LLM spawn
+  candidate_limit: 20                 # max issues/PRs per trigger label
+  max_packet_bytes: 32000             # hard cap for each work packet
+  log_tail_lines: 120                 # prompt guidance for reading logs
+  diff_max_lines: 1000                # prompt guidance before targeted diffs
 
 agents:
 
@@ -456,6 +464,7 @@ agents:
     args: ["--yes", "@openai/codex", "exec", "-m", "gpt-5.4", "--dangerously-bypass-approvals-and-sandbox"]
     trigger:
       pr_labels: ["ready-for-review", "merge-train-waiting"]
+      pr_check_gate: settled
     interval_min: 5
     total_min: 20
     stall_min: 20        # = total_min
@@ -472,18 +481,23 @@ agents:
       (oldest first).
 
       STEPS:
-      1. Read agentry/state/sessions/reviewer/latest.md if it exists.
+      1. Read the Agentry Work Packet path from your invocation prompt if it
+         exists. Use it as the starting queue/context summary, then verify
+         current truth with GitHub and repo files.
       2. Pick the oldest:
            gh pr list --state open --limit 100 --json number,title,headRefName,labels --jq '[.[] | select((.labels | map(.name) | index("ready-for-review")) or (.labels | map(.name) | index("merge-train-waiting")))] | sort_by(.number)[0]'
          Exit 0 if none.
-      3. Read PR + linked issue + spec + per-issue distilled logs:
+      3. Read PR + linked issue + spec + bounded per-issue distilled logs:
            gh pr view <n> --json body,title,files,headRefName
-           gh pr diff <n>
            gh issue view <id>
-           cat docs/history/specs/<id>-<slug>.md
-           cat agentry/logs/issues/<id>-<slug>/architect.log
-           cat agentry/logs/issues/<id>-<slug>/implementer.log
-           cat agentry/logs/issues/<id>-<slug>/tester.log
+           Get-Content docs/history/specs/<id>-<slug>.md
+           Get-Content -Tail 120 agentry/logs/issues/<id>-<slug>/architect.log
+           Get-Content -Tail 120 agentry/logs/issues/<id>-<slug>/implementer.log
+           Get-Content -Tail 120 agentry/logs/issues/<id>-<slug>/tester.log
+         On Linux/macOS use `tail -n 120` for logs. Start with the PR file
+         list. Only read the full PR diff when it is <= 1000 lines; otherwise
+         inspect targeted diffs for changed files relevant to the design,
+         sensitive paths, or failing tests.
       4. Verify the PR is rebased on origin/main, and repair simple stale
          branches before review:
            git fetch origin
@@ -516,11 +530,12 @@ agents:
          remove `merge-train-waiting`, and continue.
       6. Check CI status:
            gh pr checks <n> --json name,state,bucket
-         If checks are pending, queued, or in progress, append a concise
-         reviewer log entry, leave labels unchanged, and exit 0. Do not call
-         scheduling or wakeup tools such as `ScheduleWakeup`, `Cron*`,
-         `PushNotification`, or `RemoteTrigger`; Agentry will retry on the
-         next orchestrator interval.
+         The orchestrator normally avoids spawning Reviewer while checks are
+         pending. Still verify inside the role. If checks are pending, queued,
+         or in progress, append a concise reviewer log entry, leave labels
+         unchanged, and exit 0. Do not call scheduling or wakeup tools such as
+         `ScheduleWakeup`, `Cron*`, `PushNotification`, or `RemoteTrigger`;
+         Agentry will retry on the next orchestrator interval.
       7. Run review checklist per docs/ai/roles/reviewer.md:
          - spec adherence (acceptance criteria, non-goals respected)
          - engineering / design standards
@@ -561,6 +576,8 @@ agents:
       - Don't approve a merge-sensitive PR while an older merge-sensitive PR is
         still open in the review/approval lane. Use `merge-train-waiting`.
       - At most one PR approved per run.
+      - Do not read complete historical logs. Use the work packet and bounded
+        tails unless a specific failure requires a targeted older excerpt.
       - Drive-by improvements outside scope → comment as future work, don't
         block.
       - Don't dismiss prior human reviews.

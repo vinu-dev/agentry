@@ -52,7 +52,15 @@ ready-for-design issue
 ```
 
 Each role watches only its configured input labels. If no matching label exists,
-Agentry skips the LLM process entirely.
+Agentry skips the LLM process entirely. PR-triggered roles can also wait for
+checks to settle or pass before they spawn, which prevents Reviewers from
+spending a full run just to discover that CI is still pending.
+
+Before a role starts, Agentry writes a bounded work packet with trigger labels,
+current GitHub candidates, recent session summaries, and context rules. The role
+receives the packet path in its prompt. This makes the first model action
+deterministic and small: read the packet, verify current truth, then inspect
+only the files/log tails needed for one item.
 
 ## Branch And PR Design
 
@@ -77,6 +85,11 @@ the next start and no longer blocks progress.
 Role stdout goes to `agentry/logs/<role>/<timestamp>.log`. Runtime files are
 ignored by the generated `agentry/.gitignore` and should not be committed.
 
+Token budgets are visibility controls, not hard stop rules. The design reduces
+waste by preventing unnecessary launches and oversized context before the role
+starts. Once a role is running, the supervisor still uses check-ins and timeout
+policy rather than killing purely because a token budget was exceeded.
+
 ## Release Design
 
 Agentry releases are GitHub tags/releases. Target repositories do not float to
@@ -84,4 +97,3 @@ mutable `main`; their start scripts pin a specific tag or commit. To upgrade a
 target, update the pinned ref in `agentry/start.ps1` and `agentry/start.sh`,
 stop any running Agentry process, and run the wrapper with
 `AGENTRY_FORCE_INSTALL=1`.
-

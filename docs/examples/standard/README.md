@@ -13,7 +13,7 @@ For regulated software, see the [medical-device example](../medical-device/).
 | `architect` | issues labeled `ready-for-design` | spec branch + `ready-for-implementation` |
 | `implementer` | issues labeled `ready-for-implementation`, `tests-failed`, or `changes-requested` | code/tests + `ready-for-test` |
 | `tester` | issues labeled `ready-for-test` | issue labeled `pr-open` plus PR labeled `ready-for-review`, or issue labeled `tests-failed` |
-| `reviewer` | PRs labeled `ready-for-review` | `agent-approved`, `blocked`/`changes-requested`, or unchanged while CI is still pending |
+| `reviewer` | PRs labeled `ready-for-review` or `merge-train-waiting`, after checks settle | `agent-approved`, `blocked`/`changes-requested`, or unchanged while CI is still pending |
 | `release` | release-approved work, when enabled | tags, artifacts, GitHub Release |
 
 ## Lifecycle
@@ -27,7 +27,7 @@ ready-for-design issue
   -> tester
   -> pr-open issue
   -> ready-for-review PR
-  -> reviewer (waits for CI by exiting; no wakeup tools)
+  -> reviewer (pre-gated while CI is pending; no wakeup tools)
   -> merge-train-waiting PR if an older shared-file PR must merge first
   -> agent-approved PR
 ```
@@ -82,11 +82,11 @@ Then:
 5. Run `agentry/start.ps1` or `./agentry/start.sh` when you want agents active.
 
 The generated start scripts pin Agentry to the selected branch, tag, or commit
-at install time. Prefer a release tag such as `v0.1.0` for stable target repos.
+at install time. Prefer a release tag such as `v0.1.1` for stable target repos.
 On Linux, that looks like:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/vinu-dev/agentry/v0.1.0/scripts/add-to-target.sh | AGENTRY_BRANCH=v0.1.0 bash
+curl -fsSL https://raw.githubusercontent.com/vinu-dev/agentry/v0.1.1/scripts/add-to-target.sh | AGENTRY_BRANCH=v0.1.1 bash
 ```
 
 ## Model Defaults
@@ -99,6 +99,10 @@ tiers:
 
 Targets can replace any role with Claude Code, local Llama/Ollama, or wrapper
 scripts by changing that role's `cli` and `args`.
+
+The standard config also enables bounded work packets and sets Reviewer
+`trigger.pr_check_gate: settled`, so review does not spawn while all matching PR
+checks are still pending.
 
 ## Merge-Sensitive Paths
 

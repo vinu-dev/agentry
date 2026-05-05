@@ -95,3 +95,14 @@ class TestMakePrompt:
         assert "Agentry Invocation" in out
         assert "CUSTOM ROLE BODY" in out
         assert "GitHub app connectors" in out
+
+    def test_build_role_prompt_includes_work_packet_when_supplied(self):
+        out = build_role_prompt(
+            "reviewer",
+            ["reviewer"],
+            "CUSTOM ROLE BODY",
+            work_packet_path="D:\\target\\agentry\\state\\workpackets\\reviewer.md",
+        )
+        assert "Agentry Work Packet" in out
+        assert "D:\\target\\agentry\\state\\workpackets\\reviewer.md" in out
+        assert "bounded log tails" in out

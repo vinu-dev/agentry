@@ -100,6 +100,34 @@ class TestAgentConfig:
         assert cfg.trigger is not None
         assert cfg.trigger.issue_labels == ["ready-for-test"]
         assert cfg.trigger.pr_labels == ["ready-for-review"]
+        assert cfg.trigger.pr_check_gate == "none"
+
+    def test_trigger_accepts_pr_check_gate(self):
+        cfg = AgentConfig(
+            cli="claude",
+            interval_min=5,
+            total_min=30,
+            stall_min=5,
+            trigger={
+                "pr_labels": ["ready-for-review"],
+                "pr_check_gate": "settled",
+            },
+        )
+        assert cfg.trigger is not None
+        assert cfg.trigger.pr_check_gate == "settled"
+
+    def test_trigger_rejects_unknown_pr_check_gate(self):
+        with pytest.raises(ValidationError):
+            AgentConfig(
+                cli="claude",
+                interval_min=5,
+                total_min=30,
+                stall_min=5,
+                trigger={
+                    "pr_labels": ["ready-for-review"],
+                    "pr_check_gate": "maybe",
+                },
+            )
 
 
 class TestTargetConfig:
@@ -116,6 +144,8 @@ class TestTargetConfig:
         assert cfg.mode == "pipeline"
         assert cfg.automation.auto_merge is False
         assert cfg.research.allow_create_issues is False
+        assert cfg.context.work_packets is True
+        assert cfg.context.max_packet_bytes == 32_000
         assert cfg.merge_sensitive_paths == []
 
     def test_mode_validation(self):

@@ -25,6 +25,7 @@ from __future__ import annotations
 import os
 from importlib.resources import files
 from pathlib import Path
+from typing import Literal
 
 import yaml
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
@@ -44,6 +45,13 @@ class AgentTriggerConfig(BaseModel):
     pr_labels: list[str] = Field(
         default_factory=list,
         description="Run only when an open pull request has at least one of these labels.",
+    )
+    pr_check_gate: Literal["none", "settled", "green"] = Field(
+        default="none",
+        description=(
+            "Extra cheap gate for PR-triggered roles. 'settled' waits until checks are "
+            "not pending; 'green' waits until checks are passing or absent."
+        ),
     )
 
     @field_validator("issue_labels", "pr_labels")
@@ -154,6 +162,41 @@ class ResearchConfig(BaseModel):
     )
 
 
+class ContextConfig(BaseModel):
+    """Controls for cheap context prepared before an LLM role starts."""
+
+    work_packets: bool = Field(
+        default=True,
+        description=(
+            "Write a bounded per-run Markdown work packet before spawning a role."
+        ),
+    )
+    candidate_limit: int = Field(
+        default=20,
+        ge=1,
+        le=100,
+        description="Maximum GitHub issue/PR candidates recorded per trigger label.",
+    )
+    max_packet_bytes: int = Field(
+        default=32_000,
+        ge=4_000,
+        le=256_000,
+        description="Maximum UTF-8 bytes kept in each generated work packet.",
+    )
+    log_tail_lines: int = Field(
+        default=120,
+        ge=20,
+        le=1_000,
+        description="Recommended maximum log lines role prompts should read at once.",
+    )
+    diff_max_lines: int = Field(
+        default=1_000,
+        ge=100,
+        le=10_000,
+        description="Recommended maximum diff lines before asking for a split or targeted diff.",
+    )
+
+
 class TargetConfig(BaseModel):
     """Top-level shape of ``<target>/agentry/config.yml``."""
 
@@ -169,6 +212,7 @@ class TargetConfig(BaseModel):
     )
     automation: AutomationConfig = Field(default_factory=AutomationConfig)
     research: ResearchConfig = Field(default_factory=ResearchConfig)
+    context: ContextConfig = Field(default_factory=ContextConfig)
     sensitive_paths: list[str] = Field(default_factory=list)
     merge_sensitive_paths: list[str] = Field(default_factory=list)
     labels: dict[str, str] = Field(default_factory=dict)
@@ -301,6 +345,7 @@ def load_target_env(target_path: Path | str) -> None:
 __all__ = [
     "AgentConfig",
     "AutomationConfig",
+    "ContextConfig",
     "ResearchConfig",
     "TargetConfig",
     "ValidationError",

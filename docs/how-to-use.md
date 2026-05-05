@@ -52,14 +52,14 @@ Windows PowerShell:
 
 ```powershell
 $script = Join-Path $env:TEMP "add-to-target.ps1"
-iwr -useb https://raw.githubusercontent.com/vinu-dev/agentry/v0.1.0/scripts/add-to-target.ps1 -OutFile $script
-powershell -NoProfile -ExecutionPolicy Bypass -File $script -Branch v0.1.0
+iwr -useb https://raw.githubusercontent.com/vinu-dev/agentry/v0.1.1/scripts/add-to-target.ps1 -OutFile $script
+powershell -NoProfile -ExecutionPolicy Bypass -File $script -Branch v0.1.1
 ```
 
 Linux shell:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/vinu-dev/agentry/v0.1.0/scripts/add-to-target.sh | AGENTRY_BRANCH=v0.1.0 bash
+curl -fsSL https://raw.githubusercontent.com/vinu-dev/agentry/v0.1.1/scripts/add-to-target.sh | AGENTRY_BRANCH=v0.1.1 bash
 ```
 
 This writes:
@@ -262,7 +262,7 @@ Then run doctor through the wrapper:
 ./agentry/start.sh doctor --target . --init-labels
 ```
 
-Use a release tag such as `v0.1.0` for normal upgrades. Use a raw commit only
+Use a release tag such as `v0.1.1` for normal upgrades. Use a raw commit only
 when deliberately testing an unreleased platform fix.
 
 ---
@@ -364,6 +364,50 @@ ones with `merge-train-waiting` until they can rebase on the merged result.
 
 ---
 
+## Reducing Token Burn
+
+Agentry does its cheapest checks before spawning an LLM:
+
+- Issue-triggered roles start only when an open issue has a matching label.
+- PR-triggered roles start only when an open PR has a matching label.
+- PR-triggered roles may also use `trigger.pr_check_gate`.
+
+Use this on Reviewer-like roles:
+
+```yaml
+trigger:
+  pr_labels: ["ready-for-review", "merge-train-waiting"]
+  pr_check_gate: settled  # none | settled | green
+```
+
+`settled` avoids a review launch while all candidate PR checks are pending,
+queued, or running. `green` waits for passing or absent checks. If the GitHub
+CLI cannot determine check state because of a transient API failure, Agentry
+allows the role to run rather than permanently blocking the queue.
+
+Agentry also writes a bounded work packet before each role spawn:
+
+```yaml
+context:
+  work_packets: true
+  candidate_limit: 20
+  max_packet_bytes: 32000
+  log_tail_lines: 120
+  diff_max_lines: 1000
+```
+
+The packet is stored under `agentry/state/workpackets/<role>.md` and its
+absolute path is injected into the role prompt. Role prompts should read it
+first, then use current GitHub state as truth. They should tail logs rather
+than reading whole logs, inspect PR file lists before diffs, and use targeted
+diffs when the full PR diff is large.
+
+Token budgets still behave as warnings recorded in status and dashboard output.
+They help tune prompts and model choices; they do not kill an active role by
+themselves.
+
+---
+
 ## Troubleshooting
 
 If a role never starts, run:
@@ -392,6 +436,8 @@ If tokens are being consumed unexpectedly:
 
 - run `agentry status --target .`
 - open `agentry gui --target .`
+- inspect `agentry/state/workpackets/<role>.md` to see what context the role
+  received
 - use `agentry stop --target . --all`
 - switch `mode: manual` in `agentry/config.yml` or through the GUI
 - check whether Researcher is enabled only in `autonomous` mode

@@ -63,6 +63,13 @@ research:
   allow_create_issues: false
   max_open_ready_for_design: 3
 
+context:
+  work_packets: true
+  candidate_limit: 20
+  max_packet_bytes: 32000
+  log_tail_lines: 120
+  diff_max_lines: 1000
+
 labels:
   logical-name: actual-github-label
 
@@ -80,6 +87,7 @@ agents:
     trigger:
       issue_labels: ["ready-for-design"]
       pr_labels: []
+      pr_check_gate: none
     prompt: |
       Optional full role prompt. If omitted, Agentry uses the generic prompt.
 
@@ -106,6 +114,8 @@ Optional top-level fields:
 - `automation`: operator-level controls. `auto_merge` and
   `stop_when_queue_empty` are configuration flags for current/future workflows.
 - `research`: controls whether Researcher may create new GitHub issues.
+- `context`: controls bounded per-run work packets and prompt guidance for
+  log-tail and diff-size limits.
 - `labels`: target-specific label names to create with `doctor --init-labels`.
 - `sensitive_paths`: policy globs for role rule files to consult.
 - `merge_sensitive_paths`: high-conflict shared paths that Reviewer should
@@ -131,6 +141,9 @@ Optional per-role fields:
   Fresh stream-JSON activity during that window is treated as progress even when
   the agent cannot answer with `STATUS:` immediately.
 - `trigger`: cheap GitHub label gates checked before starting an LLM process.
+  `pr_check_gate` may be `none`, `settled`, or `green` for PR-triggered roles.
+  `settled` skips while all matching PR checks are pending, queued, or running.
+  `green` is stricter and waits for passing or absent checks.
 - `prompt`: full prompt sent to the CLI over stdin. If absent, Agentry builds a
   generic prompt pointing the role at `docs/ai/roles/<role>.md`.
 

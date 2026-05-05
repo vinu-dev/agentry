@@ -5,7 +5,7 @@ This guide describes how Agentry itself is released.
 ## Versioning
 
 Agentry uses `pyproject.toml` as the package version source. Release tags use
-the same version with a `v` prefix, for example `v0.1.0`.
+the same version with a `v` prefix, for example `v0.1.1`.
 
 Target repositories pin Agentry by Git tag or commit in:
 
@@ -38,8 +38,8 @@ agentry/start.sh
 4. Create and push the tag:
 
    ```bash
-   git tag -a v0.1.0 -m "Agentry v0.1.0"
-   git push origin v0.1.0
+   git tag -a v0.1.1 -m "Agentry v0.1.1"
+   git push origin v0.1.1
    ```
 
 5. Create the GitHub Release from the tag and attach built artifacts from

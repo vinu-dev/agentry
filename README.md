@@ -15,7 +15,7 @@ happening.
 
 ## Current Release
 
-The first supported alpha release is `v0.1.0`. Agentry is distributed from
+The current supported alpha release is `v0.1.1`. Agentry is distributed from
 GitHub releases and Git refs. Target repositories pin a specific Agentry tag or
 commit in their generated `agentry/start.ps1` and `agentry/start.sh`, so a
 working target does not silently drift when Agentry `main` changes.
@@ -104,13 +104,13 @@ the release tag to the installer. Example:
 ```powershell
 cd C:\projects\rpi-home-monitor
 $script = Join-Path $env:TEMP "add-to-target.ps1"
-iwr -useb https://raw.githubusercontent.com/vinu-dev/agentry/v0.1.0/scripts/add-to-target.ps1 -OutFile $script
-powershell -NoProfile -ExecutionPolicy Bypass -File $script -Branch v0.1.0
+iwr -useb https://raw.githubusercontent.com/vinu-dev/agentry/v0.1.1/scripts/add-to-target.ps1 -OutFile $script
+powershell -NoProfile -ExecutionPolicy Bypass -File $script -Branch v0.1.1
 ```
 
 ```bash
 cd ~/projects/rpi-home-monitor
-curl -fsSL https://raw.githubusercontent.com/vinu-dev/agentry/v0.1.0/scripts/add-to-target.sh | AGENTRY_BRANCH=v0.1.0 bash
+curl -fsSL https://raw.githubusercontent.com/vinu-dev/agentry/v0.1.1/scripts/add-to-target.sh | AGENTRY_BRANCH=v0.1.1 bash
 ```
 
 Then:
@@ -203,6 +203,44 @@ Targets declare those paths in `merge_sensitive_paths`; the oldest matching PR
 can proceed, while newer matching PRs move to `merge-train-waiting` and rebase
 after the older PR merges. This keeps traceability docs, workflow files, release
 files, and other shared generated artifacts from all becoming conflicted at once.
+
+## Token Governance
+
+Agentry avoids token burn before a role starts. Every label-triggered role first
+uses cheap GitHub checks; if there is no matching work, no LLM process is
+spawned. For PR-triggered roles, `trigger.pr_check_gate` can also wait for PR
+checks:
+
+```yaml
+trigger:
+  pr_labels: ["ready-for-review", "merge-train-waiting"]
+  pr_check_gate: settled  # none | settled | green
+```
+
+The bundled Reviewer uses `settled`, so it does not launch just to discover
+that CI is still pending. `green` is stricter and waits for passing or absent
+checks. If GitHub cannot report checks because of a transient CLI/API failure,
+Agentry allows the role to run rather than deadlocking the queue.
+
+Before a role starts, Agentry writes a bounded work packet under
+`agentry/state/workpackets/<role>.md` and injects its absolute path into the
+prompt. The packet includes trigger labels, current GitHub candidates, recent
+session summaries, and context rules. It is local runtime state and should not
+be committed.
+
+```yaml
+context:
+  work_packets: true
+  candidate_limit: 20
+  max_packet_bytes: 32000
+  log_tail_lines: 120
+  diff_max_lines: 1000
+```
+
+Role prompts should read the work packet first, tail logs instead of reading
+full historical logs, inspect PR file lists before diffs, and use targeted diffs
+for large PRs. Token budgets remain warnings recorded in session state; they are
+not automatic kill triggers.
 
 When Tester opens a PR, the bundled prompt writes the multi-line PR body to a
 temporary file and calls `gh pr create --body-file`. That avoids shell-specific
