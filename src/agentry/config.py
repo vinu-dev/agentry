@@ -167,9 +167,7 @@ class ContextConfig(BaseModel):
 
     work_packets: bool = Field(
         default=True,
-        description=(
-            "Write a bounded per-run Markdown work packet before spawning a role."
-        ),
+        description=("Write a bounded per-run Markdown work packet before spawning a role."),
     )
     candidate_limit: int = Field(
         default=20,

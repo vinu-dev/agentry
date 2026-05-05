@@ -41,7 +41,7 @@ from agentry.session import (
     utc_now,
 )
 from agentry.supervisor import ExitReason, supervise
-from agentry.workpacket import write_role_work_packet
+from agentry.workpacket import SelectedPullRequest, selected_pr_for_role, write_role_work_packet
 
 logger = logging.getLogger(__name__)
 
@@ -179,7 +179,8 @@ class Orchestrator:
                     return
                 continue
 
-            role_cwd = self._role_cwd(role)
+            selected_pr = selected_pr_for_role(self.target_config, cfg)
+            role_cwd = self._role_cwd(role, selected_pr=selected_pr)
             if role_cwd is None:
                 message = "could not prepare isolated worktree; role will retry later"
                 logger.warning("role %s skipped: %s", role, message)
@@ -308,7 +309,12 @@ class Orchestrator:
             Event(role=role, kind=kind_map[run.reason], message=msg, critical=critical)
         )
 
-    def _role_cwd(self, role: str) -> Path | None:
+    def _role_cwd(
+        self,
+        role: str,
+        *,
+        selected_pr: SelectedPullRequest | None = None,
+    ) -> Path | None:
         if not self.target_config.isolate_worktrees:
             return self.target_path
 
@@ -321,9 +327,17 @@ class Orchestrator:
             if not _is_git_worktree_clean(worktree):
                 logger.warning("role %s worktree is dirty; refusing to spawn", role)
                 return None
+            if not _refresh_role_worktree(
+                self.target_path,
+                worktree,
+                selected_pr=selected_pr,
+            ):
+                logger.warning("role %s worktree could not be refreshed", role)
+                return None
             return worktree
 
         worktree.parent.mkdir(parents=True, exist_ok=True)
+        _fetch_origin(self.target_path)
         base_ref = _choose_worktree_base_ref(self.target_path)
         logger.info("creating role worktree %s from %s", worktree, base_ref)
         try:
@@ -345,6 +359,13 @@ class Orchestrator:
             )
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
             logger.warning("could not create worktree for role %s: %s", role, e)
+            return None
+        if not _refresh_role_worktree(
+            self.target_path,
+            worktree,
+            selected_pr=selected_pr,
+        ):
+            logger.warning("role %s worktree could not be refreshed after creation", role)
             return None
         return worktree
 
@@ -370,6 +391,64 @@ def _is_git_worktree_clean(path: Path) -> bool:
         logger.warning("could not inspect role worktree %s: %s", path, e)
         return False
     return status.stdout.strip() == ""
+
+
+def _refresh_role_worktree(
+    target_path: Path,
+    worktree: Path,
+    *,
+    selected_pr: SelectedPullRequest | None,
+) -> bool:
+    """Move a clean role worktree to the ref the next role run should inspect."""
+    if selected_pr is not None:
+        return _checkout_pr_head(worktree, selected_pr.number)
+
+    _fetch_origin(worktree)
+    base_ref = _choose_worktree_base_ref(target_path)
+    return _checkout_detached(worktree, base_ref)
+
+
+def _checkout_pr_head(worktree: Path, pr_number: int) -> bool:
+    try:
+        subprocess.run(
+            ["git", "-C", str(worktree), "fetch", "origin", f"refs/pull/{pr_number}/head"],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as e:
+        logger.warning("could not fetch PR #%s into worktree %s: %s", pr_number, worktree, e)
+        return False
+    return _checkout_detached(worktree, "FETCH_HEAD")
+
+
+def _checkout_detached(worktree: Path, ref: str) -> bool:
+    try:
+        subprocess.run(
+            ["git", "-C", str(worktree), "checkout", "--detach", ref],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as e:
+        logger.warning("could not checkout %s in worktree %s: %s", ref, worktree, e)
+        return False
+    return True
+
+
+def _fetch_origin(path: Path) -> None:
+    try:
+        subprocess.run(
+            ["git", "-C", str(path), "fetch", "--prune", "origin"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+    except (subprocess.CalledProcessError, OSError, subprocess.TimeoutExpired):
+        return
 
 
 def _usage_limit_backoff_seconds(

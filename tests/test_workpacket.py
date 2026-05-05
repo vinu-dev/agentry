@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 from agentry.config import AgentConfig, TargetConfig
-from agentry.workpacket import write_role_work_packet
+from agentry.workpacket import selected_pr_for_role, write_role_work_packet
 
 
 def test_write_role_work_packet_includes_trigger_and_context(monkeypatch, tmp_path: Path):
@@ -164,6 +164,44 @@ def test_write_role_work_packet_skips_pending_pr_for_settled_gate(
     assert "Process ONLY pr #23" in text
     assert "#22:" in text
     assert "checks=pending" in text
+
+
+def test_selected_pr_for_role_matches_work_packet_selection(monkeypatch):
+    cfg = TargetConfig(
+        target_repo="owner/repo",
+        agents={
+            "regulatory_reviewer": AgentConfig(
+                cli=sys.executable,
+                args=[],
+                interval_min=5,
+                total_min=1,
+                stall_min=1,
+                trigger={
+                    "pr_labels": ["ready-for-regulatory-review"],
+                    "pr_check_gate": "green",
+                },
+            ),
+        },
+    )
+    monkeypatch.setattr(
+        "agentry.workpacket.list_open_prs_with_label",
+        lambda repo, label, *, limit: [
+            {
+                "number": 30,
+                "title": "Selected PR",
+                "headRefName": "feature/pr-head",
+                "labels": [{"name": label}],
+                "updatedAt": "2026-05-05T00:00:00Z",
+            }
+        ],
+    )
+    monkeypatch.setattr("agentry.workpacket.pr_checks_state", lambda repo, number: "green")
+
+    selected = selected_pr_for_role(cfg, cfg.agents["regulatory_reviewer"])
+
+    assert selected is not None
+    assert selected.number == 30
+    assert selected.head_ref_name == "feature/pr-head"
 
 
 def test_write_role_work_packet_respects_byte_cap(monkeypatch, tmp_path: Path):

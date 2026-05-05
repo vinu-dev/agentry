@@ -190,6 +190,12 @@ existing worktree that has uncommitted or untracked repo changes. This protects
 the next issue or PR from inheriting partial work from a previous role run; clean
 or salvage the worktree first, then start the role again.
 
+Clean role worktrees are refreshed before every run. Issue and schedule-driven
+roles detach to the current `origin/main` base, while PR-triggered roles detach
+to the selected pull request head fetched from `refs/pull/<number>/head`. That
+keeps reviewers, medical gates, and merger checks aligned with the files in the
+actual PR, not a stale reusable worktree.
+
 The standard pipeline prompts also treat clean local feature branches as cache,
 not authority: Implementer retry paths and Tester reset the local feature branch
 to `origin/feature/<id>-<slug>` before rebasing. That keeps force-pushed or

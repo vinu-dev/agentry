@@ -295,6 +295,11 @@ error and the role is skipped until the operator commits, moves, or removes the
 leftover changes. This is intentional, because partial work from one issue must
 not leak into the next issue's branch.
 
+Clean worktrees are refreshed automatically before each role starts. For issue
+or scheduled work, the role detaches to the current target base, normally
+`origin/main`. For PR-triggered work, the role fetches and detaches to
+`refs/pull/<number>/head`, so local file reads and diffs match the selected PR.
+
 Clean local branches inside role worktrees are still treated as disposable role
 state. The standard Implementer retry path and Tester workflow reset their local
 feature branch from `origin/feature/<id>-<slug>` before rebasing so they validate

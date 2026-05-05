@@ -2,6 +2,25 @@
 
 All notable Agentry release changes are recorded here.
 
+## v0.1.4 - 2026-05-05
+
+PR-head worktree synchronization release.
+
+### Fixed
+
+- PR-triggered roles now refresh their isolated worktree to the selected PR
+  head before the model starts, so reviewers inspect the files that are actually
+  in the pull request instead of a stale `main` checkout.
+- Clean existing role worktrees are refreshed to current `origin/main` before
+  non-PR role runs. This prevents new issue branches from starting on a stale
+  base after earlier PRs merge.
+
+### Notes
+
+- Dirty role worktrees are still skipped rather than reset. Operators must
+  commit, move, or remove leftover local edits before Agentry reuses that
+  role's worktree.
+
 ## v0.1.3 - 2026-05-05
 
 Issue-closing PR body release.
