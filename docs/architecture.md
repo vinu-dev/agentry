@@ -65,6 +65,12 @@ allowed.
 This makes the "create new work" switch explicit. A target can keep Agentry
 running on existing tickets without letting it grow the backlog.
 
+Researcher also has a cheap backlog guard. Before launching the model, Agentry
+counts open issues with `research.backlog_labels` and skips Researcher when the
+count is at or above `research.max_open_ready_for_design`. This lets autonomous
+targets maintain a small design supply without repeatedly spending tokens while
+the queue is already full.
+
 ## Design Boundaries
 
 Agentry core deliberately owns a narrow set of responsibilities:
@@ -93,6 +99,7 @@ Each allowed role is a lightweight scheduler loop:
 
 1. Check for an active local session for that role.
 2. Check cheap GitHub triggers, such as open issues or PRs with matching labels.
+   Researcher uses the research backlog guard before any LLM process starts.
    PR-triggered roles can also use `trigger.pr_check_gate` to wait for checks
    to settle or pass before spending a review run.
 3. Prepare the role working directory, usually a per-role git worktree.

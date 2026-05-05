@@ -62,6 +62,7 @@ automation:
 research:
   allow_create_issues: false
   max_open_ready_for_design: 3
+  backlog_labels: ["ready-for-design"]
 
 context:
   work_packets: true

@@ -26,6 +26,7 @@ automation:
 research:
   allow_create_issues: false
   max_open_ready_for_design: 2
+  backlog_labels: ["ready-for-design", "ready-for-risk-analysis"]
 
 context:
   work_packets: true

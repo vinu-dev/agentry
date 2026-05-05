@@ -29,7 +29,11 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from agentry.config import AgentConfig, TargetConfig, target_logs_dir, target_worktrees_dir
-from agentry.github import has_open_issue_with_label, has_open_pr_with_label
+from agentry.github import (
+    count_open_issues_with_labels,
+    has_open_issue_with_label,
+    has_open_pr_with_label,
+)
 from agentry.notify import DiscordNotifier, Event
 from agentry.prompt import build_role_prompt
 from agentry.session import (
@@ -171,8 +175,8 @@ class Orchestrator:
                     return
                 continue
 
-            if not _role_has_work(self.target_config, cfg):
-                message = _no_work_message(cfg)
+            if not _role_has_work(self.target_config, role, cfg):
+                message = _no_work_message(self.target_config, role, cfg)
                 logger.info("role %s skipped: %s", role, message)
                 self.notifier.emit(Event(role=role, kind="no-work", message=message))
                 if self.shutdown_event.wait(timeout=cfg.interval_min * 60):
@@ -496,8 +500,11 @@ def _read_log_tail(log_path: Path, max_bytes: int = 65536) -> str:
     return data.decode("utf-8", errors="replace")
 
 
-def _role_has_work(target_config: TargetConfig, cfg: AgentConfig) -> bool:
+def _role_has_work(target_config: TargetConfig, role: str, cfg: AgentConfig) -> bool:
     """Cheaply decide whether a role should spend an LLM run."""
+    if role == "researcher" and not _researcher_backlog_needs_work(target_config):
+        return False
+
     trigger = cfg.trigger
     if trigger is None:
         return True
@@ -515,6 +522,31 @@ def _role_has_work(target_config: TargetConfig, cfg: AgentConfig) -> bool:
     return False
 
 
+def _researcher_backlog_needs_work(target_config: TargetConfig) -> bool:
+    """Return True when Researcher should replenish the design backlog."""
+    guard = target_config.research.max_open_ready_for_design
+    if guard <= 0:
+        return True
+
+    labels = [label for label in target_config.research.backlog_labels if label.strip()]
+    if not labels:
+        labels = ["ready-for-design"]
+
+    count = count_open_issues_with_labels(
+        target_config.target_repo,
+        labels,
+        limit_per_label=max(guard, 1),
+    )
+    if count is None:
+        logger.warning(
+            "researcher skipped: could not count backlog labels %s for %s",
+            ", ".join(labels),
+            target_config.target_repo,
+        )
+        return False
+    return count < guard
+
+
 def _role_allowed_by_mode(target_config: TargetConfig, role: str) -> bool:
     """Apply operator run-mode controls before any LLM process is launched."""
     if target_config.mode == "manual":
@@ -524,7 +556,12 @@ def _role_allowed_by_mode(target_config: TargetConfig, role: str) -> bool:
     return True
 
 
-def _no_work_message(cfg: AgentConfig) -> str:
+def _no_work_message(target_config: TargetConfig, role: str, cfg: AgentConfig) -> str:
+    if role == "researcher":
+        labels = ", ".join(target_config.research.backlog_labels or ["ready-for-design"])
+        guard = target_config.research.max_open_ready_for_design
+        return f"research backlog has at least {guard} open issue(s) across: {labels}"
+
     trigger = cfg.trigger
     if trigger is None:
         return "no trigger configured"

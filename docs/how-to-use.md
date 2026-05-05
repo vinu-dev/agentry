@@ -134,6 +134,19 @@ but does not let Researcher create new issues. Use `manual` to keep every role
 quiet, or `autonomous` plus `research.allow_create_issues: true` when you want
 Researcher to add new work.
 
+Use the research backlog guard to keep discovery useful but bounded:
+
+```yaml
+research:
+  allow_create_issues: true
+  max_open_ready_for_design: 2
+  backlog_labels: ["ready-for-design"]
+```
+
+For projects with a pre-design gate, add that upstream label too, such as
+`["ready-for-design", "needs-risk"]`. Agentry counts those open issues before
+starting Researcher and skips the model when the queue is already full.
+
 ### 4. Validate
 
 The repo-local `agentry` CLI is created on first start under `agentry/.venv/`.

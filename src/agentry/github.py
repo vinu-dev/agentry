@@ -130,6 +130,63 @@ def has_open_issue_with_label(target_repo: str, label: str) -> bool:
         return False
 
 
+def count_open_issues_with_labels(
+    target_repo: str,
+    labels: list[str],
+    *,
+    limit_per_label: int = 20,
+) -> int | None:
+    """Return a deduplicated open issue count for ``labels``.
+
+    ``None`` means the cheap GitHub preflight failed. Callers that guard LLM
+    launches should treat that as "try again later" instead of burning a model
+    run with stale or missing queue state.
+    """
+    if not gh_available():
+        return None
+
+    issue_numbers: set[int] = set()
+    for label in labels:
+        clean_label = label.strip()
+        if not clean_label:
+            continue
+        try:
+            r = subprocess.run(
+                [
+                    "gh",
+                    "issue",
+                    "list",
+                    "--repo",
+                    target_repo,
+                    "--state",
+                    "open",
+                    "--label",
+                    clean_label,
+                    "--limit",
+                    str(max(1, limit_per_label)),
+                    "--json",
+                    "number",
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=15,
+            )
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+            logger.warning("gh issue count failed for %s label %s: %s", target_repo, label, e)
+            return None
+        try:
+            items = json.loads(r.stdout)
+        except json.JSONDecodeError:
+            return None
+        if not isinstance(items, list):
+            return None
+        for item in items:
+            if isinstance(item, dict) and isinstance(item.get("number"), int):
+                issue_numbers.add(item["number"])
+    return len(issue_numbers)
+
+
 CheckGate = Literal["none", "settled", "green"]
 CheckState = Literal["none", "pending", "green", "failed", "unknown"]
 
