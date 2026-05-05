@@ -52,14 +52,14 @@ Windows PowerShell:
 
 ```powershell
 $script = Join-Path $env:TEMP "add-to-target.ps1"
-iwr -useb https://raw.githubusercontent.com/vinu-dev/agentry/v0.1.1/scripts/add-to-target.ps1 -OutFile $script
-powershell -NoProfile -ExecutionPolicy Bypass -File $script -Branch v0.1.1
+iwr -useb https://raw.githubusercontent.com/vinu-dev/agentry/v0.1.2/scripts/add-to-target.ps1 -OutFile $script
+powershell -NoProfile -ExecutionPolicy Bypass -File $script -Branch v0.1.2
 ```
 
 Linux shell:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/vinu-dev/agentry/v0.1.1/scripts/add-to-target.sh | AGENTRY_BRANCH=v0.1.1 bash
+curl -fsSL https://raw.githubusercontent.com/vinu-dev/agentry/v0.1.2/scripts/add-to-target.sh | AGENTRY_BRANCH=v0.1.2 bash
 ```
 
 This writes:
@@ -262,7 +262,7 @@ Then run doctor through the wrapper:
 ./agentry/start.sh doctor --target . --init-labels
 ```
 
-Use a release tag such as `v0.1.1` for normal upgrades. Use a raw commit only
+Use a release tag such as `v0.1.2` for normal upgrades. Use a raw commit only
 when deliberately testing an unreleased platform fix.
 
 ---
@@ -397,10 +397,12 @@ context:
 ```
 
 The packet is stored under `agentry/state/workpackets/<role>.md` and its
-absolute path is injected into the role prompt. Role prompts should read it
-first, then use current GitHub state as truth. They should tail logs rather
-than reading whole logs, inspect PR file lists before diffs, and use targeted
-diffs when the full PR diff is large.
+absolute path is injected into the role prompt. It names one `Selected
+Candidate`; the role must process only that item and treat the rest of the
+candidate list as read-only queue awareness. Role prompts should read the
+packet first, then use current GitHub state as truth. They should tail logs
+rather than reading whole logs, inspect PR file lists before diffs, and use
+targeted diffs when the full PR diff is large.
 
 Token budgets still behave as warnings recorded in status and dashboard output.
 They help tune prompts and model choices; they do not kill an active role by

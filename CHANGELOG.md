@@ -2,6 +2,29 @@
 
 All notable Agentry release changes are recorded here.
 
+## v0.1.2 - 2026-05-05
+
+Selected-candidate queue-discipline release.
+
+### Added
+
+- Work packets now name exactly one `Selected Candidate` before each
+  label-triggered role starts.
+- Prompt contract language that makes the selected candidate the single work
+  item for the invocation and treats other queue rows as read-only awareness.
+- Tests for trigger-priority selection and PR check-gate-aware selection.
+
+### Changed
+
+- Work packet candidate sections now mark the selected item explicitly.
+- Documentation now describes selected-candidate behavior in the README,
+  architecture, design, compatibility, watchdog, how-to-use, and example docs.
+
+### Notes
+
+- This release fixes a token-wasting integration behavior where a role could
+  inspect or relabel more than one queued item during one run.
+
 ## v0.1.1 - 2026-05-05
 
 Token-governance and deterministic review-gating release.

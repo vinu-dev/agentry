@@ -4,6 +4,8 @@ Reviews the PR, approves or blocks.
 
 ## Trigger
 Find PRs labeled `ready-for-review` or `merge-train-waiting`. Process oldest first. If none, exit immediately with code 0.
+If Agentry provides a work packet with a `Selected Candidate`, process that PR
+only; otherwise pick the oldest matching PR.
 
 ## Steps per PR
 

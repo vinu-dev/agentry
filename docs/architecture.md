@@ -110,10 +110,11 @@ Each allowed role is a lightweight scheduler loop:
 If there is no matching GitHub work, no LLM process is started.
 
 Work packets are local runtime context, not durable workflow state. They contain
-the role's trigger labels, bounded GitHub candidate lists, recent session
-summaries, and context rules such as log-tail and diff-size guidance. They are
-byte-capped on disk so a noisy queue cannot inflate the next prompt. Roles treat
-the packet as a starting point and verify current truth with GitHub.
+the role's trigger labels, one deterministic `Selected Candidate`, bounded
+read-only GitHub candidate lists, recent session summaries, and context rules
+such as log-tail and diff-size guidance. They are byte-capped on disk so a noisy
+queue cannot inflate the next prompt. Roles treat the selected candidate as the
+single item for this run and verify current truth with GitHub.
 
 For standard feature-branch validation, role prompts reset clean local feature
 branches from their matching `origin/feature/...` ref before rebasing. This keeps
@@ -191,8 +192,8 @@ not cause token burn and do not permanently block work.
 
 The work packet is overwritten for each role run. It is intentionally small and
 safe to delete. Its purpose is to prevent the next model invocation from
-rediscovering queue state, reading full historical logs, or loading a giant diff
-before it knows which files matter.
+rediscovering queue state, touching multiple queued items, reading full
+historical logs, or loading a giant diff before it knows which files matter.
 
 ## Stop Behavior
 
@@ -311,7 +312,7 @@ They do not force-reinstall into a live venv. Intentional refreshes require the
 operator to stop Agentry and run the wrapper with `AGENTRY_FORCE_INSTALL=1`.
 
 Agentry software releases are GitHub tags/releases. A normal target setup pins a
-tag, for example `v0.1.1`; an emergency integration fix may temporarily pin a
+tag, for example `v0.1.2`; an emergency integration fix may temporarily pin a
 commit until the next release is cut. See [release.md](release.md).
 
 ## Extension Model

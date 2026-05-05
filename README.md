@@ -15,7 +15,7 @@ happening.
 
 ## Current Release
 
-The current supported alpha release is `v0.1.1`. Agentry is distributed from
+The current supported alpha release is `v0.1.2`. Agentry is distributed from
 GitHub releases and Git refs. Target repositories pin a specific Agentry tag or
 commit in their generated `agentry/start.ps1` and `agentry/start.sh`, so a
 working target does not silently drift when Agentry `main` changes.
@@ -104,13 +104,13 @@ the release tag to the installer. Example:
 ```powershell
 cd C:\projects\rpi-home-monitor
 $script = Join-Path $env:TEMP "add-to-target.ps1"
-iwr -useb https://raw.githubusercontent.com/vinu-dev/agentry/v0.1.1/scripts/add-to-target.ps1 -OutFile $script
-powershell -NoProfile -ExecutionPolicy Bypass -File $script -Branch v0.1.1
+iwr -useb https://raw.githubusercontent.com/vinu-dev/agentry/v0.1.2/scripts/add-to-target.ps1 -OutFile $script
+powershell -NoProfile -ExecutionPolicy Bypass -File $script -Branch v0.1.2
 ```
 
 ```bash
 cd ~/projects/rpi-home-monitor
-curl -fsSL https://raw.githubusercontent.com/vinu-dev/agentry/v0.1.1/scripts/add-to-target.sh | AGENTRY_BRANCH=v0.1.1 bash
+curl -fsSL https://raw.githubusercontent.com/vinu-dev/agentry/v0.1.2/scripts/add-to-target.sh | AGENTRY_BRANCH=v0.1.2 bash
 ```
 
 Then:
@@ -224,9 +224,9 @@ Agentry allows the role to run rather than deadlocking the queue.
 
 Before a role starts, Agentry writes a bounded work packet under
 `agentry/state/workpackets/<role>.md` and injects its absolute path into the
-prompt. The packet includes trigger labels, current GitHub candidates, recent
-session summaries, and context rules. It is local runtime state and should not
-be committed.
+prompt. The packet includes trigger labels, exactly one `Selected Candidate`,
+bounded read-only queue context, recent session summaries, and context rules.
+It is local runtime state and should not be committed.
 
 ```yaml
 context:
@@ -237,10 +237,12 @@ context:
   diff_max_lines: 1000
 ```
 
-Role prompts should read the work packet first, tail logs instead of reading
-full historical logs, inspect PR file lists before diffs, and use targeted diffs
-for large PRs. Token budgets remain warnings recorded in session state; they are
-not automatic kill triggers.
+Role prompts should read the work packet first, process only the selected
+candidate, tail logs instead of reading full historical logs, inspect PR file
+lists before diffs, and use targeted diffs for large PRs. Other candidates in
+the packet are queue awareness, not permission to process a second item. Token
+budgets remain warnings recorded in session state; they are not automatic kill
+triggers.
 
 When Tester opens a PR, the bundled prompt writes the multi-line PR body to a
 temporary file and calls `gh pr create --body-file`. That avoids shell-specific

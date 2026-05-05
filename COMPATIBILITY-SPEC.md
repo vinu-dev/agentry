@@ -114,8 +114,8 @@ Optional top-level fields:
 - `automation`: operator-level controls. `auto_merge` and
   `stop_when_queue_empty` are configuration flags for current/future workflows.
 - `research`: controls whether Researcher may create new GitHub issues.
-- `context`: controls bounded per-run work packets and prompt guidance for
-  log-tail and diff-size limits.
+- `context`: controls bounded per-run work packets, selected-candidate queue
+  discipline, and prompt guidance for log-tail and diff-size limits.
 - `labels`: target-specific label names to create with `doctor --init-labels`.
 - `sensitive_paths`: policy globs for role rule files to consult.
 - `merge_sensitive_paths`: high-conflict shared paths that Reviewer should
@@ -290,6 +290,17 @@ Role prompts may also write continuity notes under:
 ```text
 agentry/state/
 ```
+
+Agentry may write a per-role work packet under:
+
+```text
+agentry/state/workpackets/<role>.md
+```
+
+When present, the packet names exactly one `Selected Candidate`. A compatible
+role must process only that selected item in the current invocation. Other
+candidate rows are read-only queue awareness unless they directly block the
+selected item.
 
 GitHub remains the source of truth for issues, PRs, labels, branches, and
 review state. Local state should only help supervision and role continuity.

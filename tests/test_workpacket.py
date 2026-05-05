@@ -46,9 +46,124 @@ def test_write_role_work_packet_includes_trigger_and_context(monkeypatch, tmp_pa
     text = path.read_text(encoding="utf-8")
     assert "Agentry Work Packet: reviewer" in text
     assert "PR check gate: settled" in text
+    assert "## Selected Candidate" in text
+    assert "Process ONLY pr #12" in text
     assert "#12: Ready PR" in text
     assert "checks=green" in text
     assert "Get-Content -Tail 120" in text
+
+
+def test_write_role_work_packet_selects_one_issue_by_trigger_priority(
+    monkeypatch,
+    tmp_path: Path,
+):
+    cfg = TargetConfig(
+        target_repo="owner/repo",
+        agents={
+            "implementer": AgentConfig(
+                cli=sys.executable,
+                args=[],
+                interval_min=5,
+                total_min=1,
+                stall_min=1,
+                trigger={
+                    "issue_labels": [
+                        "changes-requested",
+                        "tests-failed",
+                        "ready-for-implementation",
+                    ]
+                },
+            ),
+        },
+    )
+
+    def issues_for_label(repo, label, *, limit):
+        del repo, limit
+        if label == "tests-failed":
+            return [
+                {
+                    "number": 14,
+                    "title": "Fix localization traceability",
+                    "labels": [{"name": label}, {"name": "pr-open"}],
+                    "updatedAt": "2026-05-05T00:00:00Z",
+                }
+            ]
+        if label == "ready-for-implementation":
+            return [
+                {
+                    "number": 12,
+                    "title": "Reconcile SWR counts",
+                    "labels": [{"name": label}, {"name": "pr-open"}],
+                    "updatedAt": "2026-05-05T00:00:00Z",
+                }
+            ]
+        return []
+
+    monkeypatch.setattr("agentry.workpacket.list_open_issues_with_label", issues_for_label)
+
+    path = write_role_work_packet(tmp_path, cfg, "implementer", cfg.agents["implementer"])
+
+    assert path is not None
+    text = path.read_text(encoding="utf-8")
+    assert "- Trigger label: `tests-failed`" in text
+    assert "- Number: #14" in text
+    assert "Process ONLY issue #14" in text
+    assert "#12:" in text
+    assert "Do not process these in this run" in text
+
+
+def test_write_role_work_packet_skips_pending_pr_for_settled_gate(
+    monkeypatch,
+    tmp_path: Path,
+):
+    cfg = TargetConfig(
+        target_repo="owner/repo",
+        agents={
+            "reviewer": AgentConfig(
+                cli=sys.executable,
+                args=[],
+                interval_min=5,
+                total_min=1,
+                stall_min=1,
+                trigger={
+                    "pr_labels": ["ready-for-review"],
+                    "pr_check_gate": "settled",
+                },
+            ),
+        },
+    )
+    monkeypatch.setattr(
+        "agentry.workpacket.list_open_prs_with_label",
+        lambda repo, label, *, limit: [
+            {
+                "number": 22,
+                "title": "Still building",
+                "headRefName": "feature/pending",
+                "labels": [{"name": label}],
+                "updatedAt": "2026-05-05T00:00:00Z",
+            },
+            {
+                "number": 23,
+                "title": "Ready for review",
+                "headRefName": "feature/green",
+                "labels": [{"name": label}],
+                "updatedAt": "2026-05-05T00:00:00Z",
+            },
+        ],
+    )
+    monkeypatch.setattr(
+        "agentry.workpacket.pr_checks_state",
+        lambda repo, number: "pending" if number == 22 else "green",
+    )
+
+    path = write_role_work_packet(tmp_path, cfg, "reviewer", cfg.agents["reviewer"])
+
+    assert path is not None
+    text = path.read_text(encoding="utf-8")
+    assert "- Number: #23" in text
+    assert "Process ONLY pr #23" in text
+    assert "#22:" in text
+    assert "checks=pending" in text
 
 
 def test_write_role_work_packet_respects_byte_cap(monkeypatch, tmp_path: Path):

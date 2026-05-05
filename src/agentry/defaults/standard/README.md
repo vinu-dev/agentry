@@ -41,8 +41,10 @@ newer ones with `merge-train-waiting` until they can rebase after the older
 merge.
 
 To reduce token burn, keep the `context` block enabled. Agentry writes bounded
-work packets under `agentry/state/workpackets/` before role spawn, and the
-standard Reviewer waits for PR checks to settle before launching:
+work packets under `agentry/state/workpackets/` before role spawn. Each packet
+names one `Selected Candidate`; the role processes that one item and treats the
+rest of the queue listing as read-only awareness. The standard Reviewer also
+waits for PR checks to settle before launching:
 
 ```yaml
 context:
@@ -141,7 +143,7 @@ running Agentry process that uses this venv, and rerun the wrapper with
 force-reinstalling, so `status`, `doctor`, `configure`, and `gui` are safe to
 run while Agentry is live.
 
-Prefer release tags such as `v0.1.1` for stable target repos. Use raw commits
+Prefer release tags such as `v0.1.2` for stable target repos. Use raw commits
 only for short-lived platform fix testing before the next release is cut.
 
 ## Remove

@@ -83,6 +83,8 @@ class TestMakePrompt:
         assert "ScheduleWakeup" in RUNTIME_CONTRACT
         assert "orchestrator interval" in RUNTIME_CONTRACT
         assert "will retry" in RUNTIME_CONTRACT
+        assert "Selected Candidate" in RUNTIME_CONTRACT
+        assert "single work item" in RUNTIME_CONTRACT
 
     def test_invocation_contract_requires_immediate_execution(self):
         assert "work order for this run" in INVOCATION_CONTRACT
@@ -106,3 +108,4 @@ class TestMakePrompt:
         assert "Agentry Work Packet" in out
         assert "D:\\target\\agentry\\state\\workpackets\\reviewer.md" in out
         assert "bounded log tails" in out
+        assert "process only that candidate" in out

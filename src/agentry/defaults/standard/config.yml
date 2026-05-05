@@ -179,7 +179,8 @@ agents:
 
       STEPS:
       1. Read agentry/state/sessions/architect/latest.md if it exists.
-      2. Pick the oldest:
+      2. If the Work Packet names a Selected Candidate, use that issue.
+         Otherwise pick the oldest:
            gh issue list --label ready-for-design --state open \
              --json number,title,body --jq 'sort_by(.number)[0]'
          Exit 0 if none.
@@ -280,7 +281,8 @@ agents:
 
       STEPS:
       1. Read agentry/state/sessions/implementer/latest.md if it exists.
-      2. Pick the oldest:
+      2. If the Work Packet names a Selected Candidate, use that issue.
+         Otherwise pick the oldest:
            gh issue list --label changes-requested --state open --json number,title --jq 'sort_by(.number)[0]'
            gh issue list --label tests-failed --state open --json number,title --jq 'sort_by(.number)[0]'
            gh issue list --label ready-for-implementation --state open --json number,title --jq 'sort_by(.number)[0]'
@@ -380,7 +382,8 @@ agents:
 
       STEPS:
       1. Read agentry/state/sessions/tester/latest.md if it exists.
-      2. Pick the oldest:
+      2. If the Work Packet names a Selected Candidate, use that issue.
+         Otherwise pick the oldest:
            gh issue list --label ready-for-test --state open --json number,title --jq 'sort_by(.number)[0]'
          Exit 0 if none.
       3. Switch to feature branch and rebase:
@@ -484,7 +487,8 @@ agents:
       1. Read the Agentry Work Packet path from your invocation prompt if it
          exists. Use it as the starting queue/context summary, then verify
          current truth with GitHub and repo files.
-      2. Pick the oldest:
+      2. If the Work Packet names a Selected Candidate, use that PR.
+         Otherwise pick the oldest:
            gh pr list --state open --limit 100 --json number,title,headRefName,labels --jq '[.[] | select((.labels | map(.name) | index("ready-for-review")) or (.labels | map(.name) | index("merge-train-waiting")))] | sort_by(.number)[0]'
          Exit 0 if none.
       3. Read PR + linked issue + spec + bounded per-issue distilled logs:

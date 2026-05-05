@@ -4,6 +4,8 @@ Turns approved feature ideas into design documents.
 
 ## Trigger
 Find issues labeled `ready-for-design` (oldest first). If none, exit immediately with code 0.
+If Agentry provides a work packet with a `Selected Candidate`, process that
+issue only; otherwise pick the oldest matching issue.
 
 ## Steps per issue
 

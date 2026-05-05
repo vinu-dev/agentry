@@ -4,6 +4,8 @@ Runs the project's test suite against the implementer's branch. If green, opens 
 
 ## Trigger
 Find issues labeled `ready-for-test`. Process oldest first. If none, exit immediately with code 0.
+If Agentry provides a work packet with a `Selected Candidate`, process that
+issue only; otherwise pick the oldest matching issue.
 
 ## Steps per issue
 

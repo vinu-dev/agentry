@@ -46,6 +46,10 @@ RUNTIME_CONTRACT = """\
   state such as CI is still pending, leave the item in its current queue state,
   record a concise status if the role instructions call for it, and exit; the
   orchestrator interval will retry.
+- If the invocation includes a work packet with a Selected Candidate, that
+  candidate is the single work item for this run. Do not choose a different
+  item from role rules or queue scans unless the selected item no longer exists
+  or no longer has the trigger state.
 - Never leave an item in the same trigger label after a completed cycle. Move it
   forward, move it back to a retry label, or mark it blocked with a comment that
   explains the next human or agent action.
@@ -81,6 +85,10 @@ A bounded, precomputed work packet for this run is available at:
 Read it first. Treat it as a starting point, not as authority over current
 GitHub or repo state. Prefer bounded log tails and targeted diffs over full
 logs or full-repo scans.
+
+If the packet contains a Selected Candidate, process only that candidate in
+this run. Other candidates in the packet are read-only queue awareness unless
+they directly block the selected item.
 """
 
 
