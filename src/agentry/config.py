@@ -158,7 +158,18 @@ class ResearchConfig(BaseModel):
     max_open_ready_for_design: int = Field(
         default=3,
         ge=0,
-        description="Recommended backlog guard before researcher creates more design-ready issues.",
+        description=(
+            "Cheap backlog guard before Researcher creates more design-ready issues. "
+            "When the counted open issue backlog is at or above this value, "
+            "Researcher is skipped without launching an LLM process."
+        ),
+    )
+    backlog_labels: list[str] = Field(
+        default_factory=lambda: ["ready-for-design"],
+        description=(
+            "Open issue labels counted by the Researcher backlog guard. "
+            "Targets with pre-design gates can include their upstream labels."
+        ),
     )
 
 

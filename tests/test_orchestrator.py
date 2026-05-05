@@ -279,6 +279,86 @@ def test_pipeline_mode_blocks_researcher_unless_autonomous():
     assert _role_allowed_by_mode(autonomous_cfg, "researcher")
 
 
+def test_researcher_skips_when_design_backlog_guard_is_full(monkeypatch):
+    researcher = AgentConfig(
+        cli=sys.executable,
+        args=["-c", "print('research')"],
+        interval_min=60,
+        total_min=1,
+        stall_min=1,
+    )
+    target_config = TargetConfig(
+        target_repo="test/repo",
+        mode="autonomous",
+        research={
+            "allow_create_issues": True,
+            "max_open_ready_for_design": 2,
+            "backlog_labels": ["ready-for-design", "needs-risk"],
+        },
+        agents={"researcher": researcher},
+    )
+    seen: dict[str, object] = {}
+
+    def fake_count(repo: str, labels: list[str], **kwargs) -> int:
+        seen["repo"] = repo
+        seen["labels"] = labels
+        seen["limit"] = kwargs["limit_per_label"]
+        return 2
+
+    monkeypatch.setattr("agentry.orchestrator.count_open_issues_with_labels", fake_count)
+
+    assert not _role_has_work(target_config, "researcher", researcher)
+    assert seen == {
+        "repo": "test/repo",
+        "labels": ["ready-for-design", "needs-risk"],
+        "limit": 2,
+    }
+
+
+def test_researcher_runs_when_design_backlog_below_guard(monkeypatch):
+    researcher = AgentConfig(
+        cli=sys.executable,
+        args=["-c", "print('research')"],
+        interval_min=60,
+        total_min=1,
+        stall_min=1,
+    )
+    target_config = TargetConfig(
+        target_repo="test/repo",
+        mode="autonomous",
+        research={"allow_create_issues": True, "max_open_ready_for_design": 2},
+        agents={"researcher": researcher},
+    )
+    monkeypatch.setattr(
+        "agentry.orchestrator.count_open_issues_with_labels",
+        lambda repo, labels, **kwargs: 1,
+    )
+
+    assert _role_has_work(target_config, "researcher", researcher)
+
+
+def test_researcher_skips_when_design_backlog_count_fails(monkeypatch):
+    researcher = AgentConfig(
+        cli=sys.executable,
+        args=["-c", "print('research')"],
+        interval_min=60,
+        total_min=1,
+        stall_min=1,
+    )
+    target_config = TargetConfig(
+        target_repo="test/repo",
+        mode="autonomous",
+        research={"allow_create_issues": True, "max_open_ready_for_design": 2},
+        agents={"researcher": researcher},
+    )
+    monkeypatch.setattr(
+        "agentry.orchestrator.count_open_issues_with_labels",
+        lambda repo, labels, **kwargs: None,
+    )
+
+    assert not _role_has_work(target_config, "researcher", researcher)
+
+
 def test_role_trigger_skips_when_no_matching_github_work(monkeypatch, tmp_path: Path):
     target_config = TargetConfig(
         target_repo="test/repo",
@@ -303,7 +383,7 @@ def test_role_trigger_skips_when_no_matching_github_work(monkeypatch, tmp_path: 
         lambda repo, label, **kwargs: False,
     )
 
-    assert not _role_has_work(target_config, target_config.agents["tester"])
+    assert not _role_has_work(target_config, "tester", target_config.agents["tester"])
 
 
 def test_role_trigger_runs_when_issue_label_matches(monkeypatch):
@@ -329,7 +409,7 @@ def test_role_trigger_runs_when_issue_label_matches(monkeypatch):
         lambda repo, label, **kwargs: False,
     )
 
-    assert _role_has_work(target_config, target_config.agents["implementer"])
+    assert _role_has_work(target_config, "implementer", target_config.agents["implementer"])
 
 
 def test_role_trigger_runs_when_pr_label_matches(monkeypatch):
@@ -355,7 +435,7 @@ def test_role_trigger_runs_when_pr_label_matches(monkeypatch):
         lambda repo, label, **kwargs: label == "ready-for-review",
     )
 
-    assert _role_has_work(target_config, target_config.agents["reviewer"])
+    assert _role_has_work(target_config, "reviewer", target_config.agents["reviewer"])
 
 
 def test_role_trigger_passes_pr_check_gate(monkeypatch):
@@ -387,7 +467,7 @@ def test_role_trigger_passes_pr_check_gate(monkeypatch):
 
     monkeypatch.setattr("agentry.orchestrator.has_open_pr_with_label", fake_has_open_pr)
 
-    assert not _role_has_work(target_config, target_config.agents["reviewer"])
+    assert not _role_has_work(target_config, "reviewer", target_config.agents["reviewer"])
     assert seen["gate"] == "settled"
 
 

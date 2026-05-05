@@ -60,6 +60,12 @@ Agentry skips the LLM process entirely. PR-triggered roles can also wait for
 checks to settle or pass before they spawn, which prevents Reviewers from
 spending a full run just to discover that CI is still pending.
 
+Researcher is schedule-driven, but it still has a cheap queue-depth guard.
+Agentry counts the labels listed in `research.backlog_labels` and launches
+Researcher only when that open issue count is below
+`research.max_open_ready_for_design`. This keeps autonomous discovery bounded
+and avoids token spend when Architect already has enough design supply.
+
 Before a role starts, Agentry writes a bounded work packet with trigger labels,
 one selected candidate, read-only queue context, recent session summaries, and
 context rules. The role receives the packet path in its prompt. This makes the

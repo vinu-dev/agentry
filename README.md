@@ -166,6 +166,22 @@ source URLs and access dates, an MVP hypothesis, validation expectations, and
 clear out-of-scope boundaries. It should identify capability patterns worth
 adapting, not copy a competitor's proprietary UX or claims.
 
+Agentry checks the research backlog before launching the Researcher LLM. Set
+`research.max_open_ready_for_design` to the desired queue floor/guard and
+`research.backlog_labels` to the issue labels that count as design supply. For
+medical or regulated targets with a pre-design risk gate, include both the
+Architect label and the upstream risk label, for example:
+
+```yaml
+research:
+  allow_create_issues: true
+  max_open_ready_for_design: 2
+  backlog_labels: ["ready-for-design", "needs-risk"]
+```
+
+When the counted backlog is already at or above the guard, Agentry skips
+Researcher without starting the model process.
+
 ## Start And Stop
 
 Start foreground agents:
@@ -297,6 +313,11 @@ Each role can use a different model or provider:
 ```yaml
 target_repo: vinu-dev/rpi-home-monitor
 mode: pipeline
+
+research:
+  allow_create_issues: false
+  max_open_ready_for_design: 3
+  backlog_labels: ["ready-for-design"]
 
 agents:
   researcher:

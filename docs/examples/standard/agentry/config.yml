@@ -51,6 +51,7 @@ automation:
 research:
   allow_create_issues: false          # researcher off unless autonomous
   max_open_ready_for_design: 3
+  backlog_labels: ["ready-for-design"]
 
 context:
   work_packets: true                  # write bounded context before LLM spawn

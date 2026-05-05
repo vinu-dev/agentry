@@ -144,6 +144,7 @@ class TestTargetConfig:
         assert cfg.mode == "pipeline"
         assert cfg.automation.auto_merge is False
         assert cfg.research.allow_create_issues is False
+        assert cfg.research.backlog_labels == ["ready-for-design"]
         assert cfg.context.work_packets is True
         assert cfg.context.max_packet_bytes == 32_000
         assert cfg.merge_sensitive_paths == []
