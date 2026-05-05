@@ -38,6 +38,10 @@ RUNTIME_CONTRACT = """\
   including after review feedback, so humans can see that the issue has an
   active PR even when another queue label such as `changes-requested` is also
   present.
+- Issue-owned PR bodies must include a GitHub closing keyword such as
+  `Closes #<issue-number>`, not just a plain issue link. This lets GitHub close
+  the issue automatically when the PR merges and prevents stale `pr-open`
+  cleanup work.
 - If `agent-approved` is missing in the target repo, create it before applying
   it: `gh label create agent-approved --color 0e8a16 --force`.
 - Do not use scheduling, wakeup, background notification, browser automation,
