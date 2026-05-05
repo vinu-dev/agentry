@@ -90,16 +90,20 @@ agents:
       2. Read recent issues + PRs to dedupe before filing:
            gh issue list --state all --limit 30
            gh pr list --state all --limit 20
-      3. Search for candidate features/bugs per the project's research focus
+      3. Act as product-owner research: search for competitor/product patterns,
+         public user requests, credible domain references, and candidate
+         features/bugs per the project's research focus
          (see docs/ai/roles/researcher.md). Filter through:
            - aligns with project mission?
            - doesn't hit any anti-goal?
            - fits existing architecture?
            - not already done in this repo?
+           - can be expressed as a small MVP with a validation path?
       4. For each candidate (cap: 3 per run), open a GitHub issue:
            gh issue create --label ready-for-design --title "..." --body "..."
-         Body MUST include: Goal, Why-this-fits-the-mission, Sources (≥1
-         external link), Rough scope, Out-of-scope.
+         Body MUST include: Goal, Why-this-fits-the-mission, source URLs with
+         access dates, User problem, Product hypothesis, MVP scope, Validation
+         idea, non-copying boundaries, Rough scope, and Out-of-scope.
       5. Append a distilled cycle entry to the daily role log:
            DATE=$(date -u +%Y-%m-%d)
            mkdir -p agentry/logs/roles/researcher
@@ -126,7 +130,7 @@ agents:
       - Be selective: every issue you file gets designed, implemented,
         tested, reviewed, and merged (after code-owner approval). If you
         wouldn't actually want it built, don't file.
-      - Cite ≥1 external source per issue.
+      - Cite at least 1 external source per issue, including an access date.
       - Don't open issues requiring regulatory clearance, hardware
         redesign, or major architecture rework — those need humans.
 

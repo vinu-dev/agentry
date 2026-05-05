@@ -2,6 +2,26 @@
 
 All notable Agentry release changes are recorded here.
 
+## v0.1.5 - 2026-05-05
+
+Product-owner Researcher defaults release.
+
+### Changed
+
+- Standard Researcher defaults now describe the role as product-owner discovery,
+  with competitor/product research as source material for small, testable
+  feature candidates.
+- Researcher issue bodies now require source URLs with access dates, a user
+  problem, product hypothesis, MVP scope, validation idea, non-copying
+  boundaries, rough scope, and out-of-scope.
+- README, architecture, design, and standard example docs now explain the
+  Researcher intent for new target repositories.
+
+### Notes
+
+- Researcher remains disabled unless the operator explicitly enables
+  autonomous issue creation.
+
 ## v0.1.4 - 2026-05-05
 
 PR-head worktree synchronization release.
