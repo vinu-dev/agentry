@@ -15,7 +15,7 @@ happening.
 
 ## Current Release
 
-The current supported alpha release is `v0.1.6`. Agentry is distributed from
+The current supported alpha release is `v0.1.7`. Agentry is distributed from
 GitHub releases and Git refs. Target repositories pin a specific Agentry tag or
 commit in their generated `agentry/start.ps1` and `agentry/start.sh`, so a
 working target does not silently drift when Agentry `main` changes.

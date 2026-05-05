@@ -2,6 +2,21 @@
 
 All notable Agentry release changes are recorded here.
 
+## v0.1.7 - 2026-05-05
+
+CI-pending queue guidance release.
+
+### Fixed
+
+- Work packets now distinguish PR-triggered roles from issue-triggered roles
+  when GitHub checks are pending.
+- PR-triggered roles still leave PR labels unchanged when required checks are
+  pending, relying on Agentry's interval retry.
+- Issue-triggered roles that open or update a PR are now told to advance the
+  issue/PR queue after local validation passes and rely on downstream
+  `pr_check_gate` settings to defer review until checks settle. This prevents a
+  locally green Tester run from leaving an unlabeled PR invisible to reviewers.
+
 ## v0.1.6 - 2026-05-05
 
 Research backlog guard release.
