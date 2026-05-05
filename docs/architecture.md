@@ -251,11 +251,16 @@ STATUS:NEEDMORETIME <minutes>
 Killing is the fallback for no response, not the first move.
 
 Role processes must not schedule their own wakeups or background callbacks.
-When a role is waiting on external state such as queued CI checks, it records
-the pending state if its role instructions call for that, leaves queue labels
-unchanged, and exits normally. The orchestrator's interval is the retry
+When a PR-triggered role is waiting on external state such as queued CI checks,
+it records the pending state if its role instructions call for that, leaves PR
+labels unchanged, and exits normally. The orchestrator's interval is the retry
 mechanism, which keeps one supervisor in control of process lifetime and queue
 state.
+
+Issue-triggered roles are different when they open or update a PR after local
+validation. They should move the issue/PR to the next queue label and rely on
+the downstream PR role's `pr_check_gate` to wait for GitHub checks. Otherwise a
+locally green Tester can leave an unlabeled PR invisible to the review queue.
 
 ## Cross-Platform Model/CLI Assignment
 
