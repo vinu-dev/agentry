@@ -26,9 +26,13 @@ RUNTIME_CONTRACT = """\
   same-author self-review, and that must not become a role failure. Treat the
   verified comment plus labels as the canonical Agentry outcome.
 - Approved PRs must end with label `agent-approved` and without
-  `ready-for-review`, `blocked`, or retry labels. Request-changes outcomes must
+  `ready-for-review`, `blocked`, `merge-train-waiting`, or retry labels.
+  Request-changes outcomes must
   remove `agent-approved`, remove `ready-for-review`, add `blocked`, and move
   the linked issue to `changes-requested`.
+- PRs blocked only by merge ordering must use `merge-train-waiting`, remove
+  `ready-for-review` and stale `agent-approved`, keep the linked issue labeled
+  `pr-open`, and wait for the next orchestrator retry after the older PR merges.
 - When a PR is opened or reused for an issue, add `pr-open` to the linked issue
   before removing its previous queue label. Keep `pr-open` while the PR exists,
   including after review feedback, so humans can see that the issue has an

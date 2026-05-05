@@ -277,6 +277,11 @@ Each role is a loop:
 The framework owns process supervision. GitHub issues, labels, PRs, branches,
 and the role rule files own the product workflow.
 
+For repos where many PRs update the same generated docs or release files, add
+those globs to `merge_sensitive_paths` in `agentry/config.yml`. The standard
+Reviewer approves only the oldest open PR touching those paths and parks newer
+ones with `merge-train-waiting` until they can rebase on the merged result.
+
 ---
 
 ## Troubleshooting

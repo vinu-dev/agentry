@@ -87,6 +87,13 @@ Reviewer also repairs stale `ready-for-review` branches with a clean rebase on
 `origin/main` before reviewing. Only real rebase conflicts leave the PR queue and
 receive `merge-conflict`.
 
+Reviewer serializes shared merge-sensitive paths. Targets list those paths in
+`merge_sensitive_paths`; the oldest matching PR stays in review, while newer
+matching PRs receive `merge-train-waiting`, drop `ready-for-review`, and retry
+after the older PR merges. This keeps controlled docs, generated traceability
+files, workflow files, release files, and similar high-conflict artifacts from
+all becoming stale together.
+
 ## GitHub As The Queue
 
 Agentry does not need a separate scheduler brain for stage transitions. Roles
@@ -113,6 +120,8 @@ issue visibly tied to its PR while review and approval happen on the PR.
 is the canonical Agentry review signal. The standard workflow does not call
 `gh pr review` by default because GitHub rejects self-review when the PR author
 and reviewer actor are the same account.
+`merge-train-waiting` is a review queue label for PRs that are otherwise ready
+but must wait behind an older PR touching the same merge-sensitive path set.
 Tester PR creation uses a temporary PR body file plus `gh pr create
 --body-file`, so multi-line validation evidence is transported as a file instead
 of shell-quoted command text.

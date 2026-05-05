@@ -34,6 +34,12 @@ docs/ai/roles/
 Edit those files for project behavior. The prompts in `agentry/config.yml`
 point at them.
 
+If multiple PRs routinely touch the same generated docs, workflow files, or
+release files, add those globs to `merge_sensitive_paths` in
+`agentry/config.yml`. Reviewer will approve the oldest matching PR and park
+newer ones with `merge-train-waiting` until they can rebase after the older
+merge.
+
 ## Machine Setup
 
 Run once per machine:

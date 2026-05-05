@@ -34,6 +34,7 @@ STANDARD_LABELS: dict[str, str] = {
     "blocked": "b60205",  # dark red
     "merge-conflict": "d93f0b",  # red
     "needs-rebase": "fbca04",  # yellow
+    "merge-train-waiting": "fbca04",  # yellow
     "needs-hardware-verification": "c5def5",  # light blue
     "release-approved": "5319e7",  # purple
 }

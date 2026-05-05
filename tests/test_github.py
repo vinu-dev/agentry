@@ -9,6 +9,7 @@ def test_standard_labels_cover_bundled_workflow_failure_states():
         "pr-open",
         "merge-conflict",
         "needs-rebase",
+        "merge-train-waiting",
         "needs-hardware-verification",
         "agent-approved",
     ):

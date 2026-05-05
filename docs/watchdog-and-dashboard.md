@@ -183,6 +183,10 @@ For reviewer outcomes, the default workflow records deterministic PR comments
 that begin `Agentry review outcome:` and pairs them with labels such as
 `agent-approved`, `blocked`, or `changes-requested`. It avoids formal
 `gh pr review` calls by default because GitHub refuses same-author self-review.
+When multiple PRs touch paths listed in `merge_sensitive_paths`, Reviewer lets
+the oldest PR proceed and moves newer ones to `merge-train-waiting`. Those PRs
+retry on later scheduler ticks, rebase after the older PR merges, and then
+continue through CI and review.
 
 ## Corner Cases
 

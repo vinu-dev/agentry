@@ -195,6 +195,7 @@ The standard labels are:
 - `blocked`
 - `merge-conflict`
 - `needs-rebase`
+- `merge-train-waiting`
 - `needs-hardware-verification`
 
 Non-standard role files may use more labels. Add those names to the config

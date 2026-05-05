@@ -156,6 +156,12 @@ Reviewer follows the same rule for stale PRs: if a `ready-for-review` branch is
 behind `origin/main`, it attempts a clean rebase and push before reviewing, and
 only labels `merge-conflict` when the rebase genuinely conflicts.
 
+The standard Reviewer also runs a small merge train for shared conflict zones.
+Targets declare those paths in `merge_sensitive_paths`; the oldest matching PR
+can proceed, while newer matching PRs move to `merge-train-waiting` and rebase
+after the older PR merges. This keeps traceability docs, workflow files, release
+files, and other shared generated artifacts from all becoming conflicted at once.
+
 When Tester opens a PR, the bundled prompt writes the multi-line PR body to a
 temporary file and calls `gh pr create --body-file`. That avoids shell-specific
 quoting failures on Windows and keeps validation evidence readable.
