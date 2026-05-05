@@ -116,6 +116,7 @@ class TestTargetConfig:
         assert cfg.mode == "pipeline"
         assert cfg.automation.auto_merge is False
         assert cfg.research.allow_create_issues is False
+        assert cfg.merge_sensitive_paths == []
 
     def test_mode_validation(self):
         with pytest.raises(ValidationError, match="mode must be"):
@@ -179,6 +180,7 @@ class TestBundledDefaults:
         assert "same account" in text
         assert "CI pending" in text
         assert "ScheduleWakeup" in text
+        assert "merge-train-waiting" in text
 
     def test_bundled_tester_keeps_issue_visible_after_pr_creation(self):
         text = bundled_default_role_path("tester").read_text(encoding="utf-8")

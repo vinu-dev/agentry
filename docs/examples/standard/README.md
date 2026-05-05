@@ -28,6 +28,7 @@ ready-for-design issue
   -> pr-open issue
   -> ready-for-review PR
   -> reviewer (waits for CI by exiting; no wakeup tools)
+  -> merge-train-waiting PR if an older shared-file PR must merge first
   -> agent-approved PR
 ```
 

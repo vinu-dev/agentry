@@ -170,6 +170,7 @@ class TargetConfig(BaseModel):
     automation: AutomationConfig = Field(default_factory=AutomationConfig)
     research: ResearchConfig = Field(default_factory=ResearchConfig)
     sensitive_paths: list[str] = Field(default_factory=list)
+    merge_sensitive_paths: list[str] = Field(default_factory=list)
     labels: dict[str, str] = Field(default_factory=dict)
 
     @field_validator("agents")
