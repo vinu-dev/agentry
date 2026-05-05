@@ -68,6 +68,22 @@ required writebacks, and exit.
 """
 
 
+def _work_packet_contract(work_packet_path: str | None) -> str:
+    if not work_packet_path:
+        return ""
+    return f"""\
+## Agentry Work Packet
+
+A bounded, precomputed work packet for this run is available at:
+
+    {work_packet_path}
+
+Read it first. Treat it as a starting point, not as authority over current
+GitHub or repo state. Prefer bounded log tails and targeted diffs over full
+logs or full-repo scans.
+"""
+
+
 GENERIC_PROMPT_TEMPLATE = """\
 You are the {role_name} in an autonomous software development pipeline.
 
@@ -131,6 +147,8 @@ def build_role_prompt(
     role_name: str,
     all_roles: list[str],
     configured_prompt: str | None = None,
+    *,
+    work_packet_path: str | None = None,
 ) -> str:
     """Build the final prompt sent to a role process.
 
@@ -139,4 +157,9 @@ def build_role_prompt(
     writeback semantics) consistent across targets and model providers.
     """
     base = configured_prompt if configured_prompt is not None else make_prompt(role_name, all_roles)
-    return f"{RUNTIME_CONTRACT.strip()}\n\n{INVOCATION_CONTRACT.strip()}\n\n{base.strip()}\n"
+    packet = _work_packet_contract(work_packet_path).strip()
+    sections = [RUNTIME_CONTRACT.strip(), INVOCATION_CONTRACT.strip()]
+    if packet:
+        sections.append(packet)
+    sections.append(base.strip())
+    return "\n\n".join(sections) + "\n"

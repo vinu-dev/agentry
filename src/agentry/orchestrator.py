@@ -41,6 +41,7 @@ from agentry.session import (
     utc_now,
 )
 from agentry.supervisor import ExitReason, supervise
+from agentry.workpacket import write_role_work_packet
 
 logger = logging.getLogger(__name__)
 
@@ -144,7 +145,6 @@ class Orchestrator:
                     return
 
     def _role_loop(self, role: str, cfg: AgentConfig, all_roles: list[str]) -> None:
-        prompt = build_role_prompt(role, all_roles, cfg.prompt)
         log_dir = target_logs_dir(self.target_path) / role
         log_dir.mkdir(parents=True, exist_ok=True)
 
@@ -189,6 +189,19 @@ class Orchestrator:
                 if self.shutdown_event.wait(timeout=cfg.interval_min * 60):
                     return
                 continue
+
+            work_packet_path = write_role_work_packet(
+                self.target_path,
+                self.target_config,
+                role,
+                cfg,
+            )
+            prompt = build_role_prompt(
+                role,
+                all_roles,
+                cfg.prompt,
+                work_packet_path=str(work_packet_path) if work_packet_path else None,
+            )
 
             log_path = log_dir / f"{int(time.time())}.log"
             self.notifier.emit(Event(role=role, kind="started", message=f"cli={cfg.cli}"))
@@ -414,7 +427,11 @@ def _role_has_work(target_config: TargetConfig, cfg: AgentConfig) -> bool:
         if has_open_issue_with_label(target_config.target_repo, label):
             return True
     for label in trigger.pr_labels:
-        if has_open_pr_with_label(target_config.target_repo, label):
+        if has_open_pr_with_label(
+            target_config.target_repo,
+            label,
+            check_gate=trigger.pr_check_gate,
+        ):
             return True
     return False
 
@@ -438,7 +455,10 @@ def _no_work_message(cfg: AgentConfig) -> str:
     labels.extend(f"pr:{label}" for label in trigger.pr_labels)
     if not labels:
         return "empty trigger"
-    return f"no matching work for {', '.join(labels)}"
+    suffix = ""
+    if trigger.pr_labels and trigger.pr_check_gate != "none":
+        suffix = f" passing pr_check_gate={trigger.pr_check_gate}"
+    return f"no matching work for {', '.join(labels)}{suffix}"
 
 
 def _is_git_repo(path: Path) -> bool:

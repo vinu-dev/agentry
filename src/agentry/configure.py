@@ -109,6 +109,13 @@ def build_recommended_config(
     data["research"]["allow_create_issues"] = bool(mode == "autonomous" and enable_researcher)
     data["research"].setdefault("max_open_ready_for_design", 3)
 
+    data.setdefault("context", {})
+    data["context"].setdefault("work_packets", True)
+    data["context"].setdefault("candidate_limit", 20)
+    data["context"].setdefault("max_packet_bytes", 32_000)
+    data["context"].setdefault("log_tail_lines", 120)
+    data["context"].setdefault("diff_max_lines", 1_000)
+
     agents = data.setdefault("agents", {})
     models = MODEL_PROFILES[model_profile]
     for role in ROLE_ORDER:
@@ -124,6 +131,10 @@ def build_recommended_config(
             cfg["enabled"] = bool(enable_release)
         else:
             cfg.setdefault("enabled", True)
+        if role == "reviewer":
+            trigger = cfg.get("trigger")
+            if isinstance(trigger, dict) and trigger.get("pr_labels"):
+                trigger.setdefault("pr_check_gate", "settled")
         cfg["args"] = _set_codex_model(cfg.get("args", []), models[role])
     return data
 
@@ -144,6 +155,7 @@ def summarize_config(raw: dict[str, Any]) -> dict[str, Any]:
         "mode": raw.get("mode", "pipeline"),
         "automation": raw.get("automation", {}),
         "research": raw.get("research", {}),
+        "context": raw.get("context", {}),
         "roles": {
             role: {
                 "enabled": bool(cfg.get("enabled", True)) if isinstance(cfg, dict) else False,

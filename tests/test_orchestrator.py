@@ -299,7 +299,7 @@ def test_role_trigger_skips_when_no_matching_github_work(monkeypatch, tmp_path: 
     )
     monkeypatch.setattr(
         "agentry.orchestrator.has_open_pr_with_label",
-        lambda repo, label: False,
+        lambda repo, label, **kwargs: False,
     )
 
     assert not _role_has_work(target_config, target_config.agents["tester"])
@@ -325,7 +325,7 @@ def test_role_trigger_runs_when_issue_label_matches(monkeypatch):
     )
     monkeypatch.setattr(
         "agentry.orchestrator.has_open_pr_with_label",
-        lambda repo, label: False,
+        lambda repo, label, **kwargs: False,
     )
 
     assert _role_has_work(target_config, target_config.agents["implementer"])
@@ -351,10 +351,43 @@ def test_role_trigger_runs_when_pr_label_matches(monkeypatch):
     )
     monkeypatch.setattr(
         "agentry.orchestrator.has_open_pr_with_label",
-        lambda repo, label: label == "ready-for-review",
+        lambda repo, label, **kwargs: label == "ready-for-review",
     )
 
     assert _role_has_work(target_config, target_config.agents["reviewer"])
+
+
+def test_role_trigger_passes_pr_check_gate(monkeypatch):
+    target_config = TargetConfig(
+        target_repo="test/repo",
+        agents={
+            "reviewer": AgentConfig(
+                cli=sys.executable,
+                args=[],
+                interval_min=60,
+                total_min=1,
+                stall_min=1,
+                trigger={
+                    "pr_labels": ["ready-for-review"],
+                    "pr_check_gate": "settled",
+                },
+            ),
+        },
+    )
+    seen: dict[str, str] = {}
+    monkeypatch.setattr(
+        "agentry.orchestrator.has_open_issue_with_label",
+        lambda repo, label: False,
+    )
+
+    def fake_has_open_pr(repo: str, label: str, **kwargs) -> bool:
+        seen["gate"] = kwargs["check_gate"]
+        return False
+
+    monkeypatch.setattr("agentry.orchestrator.has_open_pr_with_label", fake_has_open_pr)
+
+    assert not _role_has_work(target_config, target_config.agents["reviewer"])
+    assert seen["gate"] == "settled"
 
 
 def test_role_runs_inside_isolated_git_worktree(tmp_path: Path):
