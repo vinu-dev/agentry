@@ -15,7 +15,7 @@ happening.
 
 ## Current Release
 
-The current supported alpha release is `v0.1.7`. Agentry is distributed from
+The current supported alpha release is `v0.1.8`. Agentry is distributed from
 GitHub releases and Git refs. Target repositories pin a specific Agentry tag or
 commit in their generated `agentry/start.ps1` and `agentry/start.sh`, so a
 working target does not silently drift when Agentry `main` changes.
@@ -182,6 +182,22 @@ research:
 When the counted backlog is already at or above the guard, Agentry skips
 Researcher without starting the model process.
 
+Agentry also gates issue-triggered work that would create new pull requests.
+By default, only one PR may be open at a time for a target repo; issues under
+`ready-for-test` without `pr-open` are skipped until an existing PR merges or
+closes. Issues that already carry `pr-open` can still be retested or repaired,
+because that work does not increase PR fanout.
+
+```yaml
+automation:
+  max_open_prs: 1
+  pr_creation_issue_labels: ["ready-for-test"]
+```
+
+Before creating a PR, standard prompts re-check the open PR count, fetch and
+rebase on `origin/main`, and stop with `merge-conflict` if the branch cannot be
+made current cleanly.
+
 ## Start And Stop
 
 Start foreground agents:
@@ -203,6 +219,26 @@ Stop safely:
 ```bash
 ./agentry/start.sh stop --target . --all
 ```
+
+Pause or resume one role at runtime without editing committed config:
+
+```powershell
+.\agentry\start.ps1 role disable researcher --target .
+.\agentry\start.ps1 role enable researcher --target .
+.\agentry\start.ps1 role list --target .
+```
+
+```bash
+./agentry/start.sh role disable researcher --target .
+./agentry/start.sh role enable researcher --target .
+./agentry/start.sh role list --target .
+```
+
+Runtime role controls are stored in `agentry/state/role-controls.json`. They
+affect only the named role, are visible in `status` and the dashboard, and do
+not rewrite `agentry/config.yml`. A disabled role will not start new sessions;
+use `role disable <role> --stop-active` or `stop <role>` if an in-flight
+subprocess also needs to be interrupted.
 
 Agentry records one session per role under `agentry/state/sessions/`. On restart
 after a crash or reboot, old running sessions whose PIDs are gone are marked

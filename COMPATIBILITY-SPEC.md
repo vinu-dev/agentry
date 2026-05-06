@@ -244,12 +244,14 @@ Agentry CLI without starting role loops:
 .\agentry\start.ps1 gui --target .
 .\agentry\start.ps1 configure --target . --defaults
 .\agentry\start.ps1 stop --target . --all
+.\agentry\start.ps1 role disable researcher --target .
 ```
 
 ```bash
 ./agentry/start.sh gui --target .
 ./agentry/start.sh configure --target . --defaults
 ./agentry/start.sh stop --target . --all
+./agentry/start.sh role disable researcher --target .
 ```
 
 On first run, the script installs Agentry from the GitHub ref embedded in the
@@ -283,10 +285,16 @@ Agentry writes role session records to:
 
 ```text
 agentry/state/sessions/<role>.json
+agentry/state/role-controls.json
 ```
 
 Session records include role state, PID, timestamps, log path, exit reason,
 duration, token usage, and token budget status.
+
+Runtime role controls are optional target-local state. They may override the
+effective enabled state for one configured role without editing
+`agentry/config.yml`; compatible targets must continue to treat `agentry/state/`
+as uncommitted runtime data.
 
 Role prompts may also write continuity notes under:
 

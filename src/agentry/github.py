@@ -273,6 +273,53 @@ def list_open_prs_with_label(
     return items if isinstance(items, list) else []
 
 
+def count_open_pull_requests(
+    target_repo: str,
+    *,
+    limit: int = 100,
+) -> int | None:
+    """Return a bounded count of open pull requests.
+
+    ``None`` means the cheap GitHub preflight failed. Callers that use this
+    as a queue-safety gate should fail closed rather than creating more PRs
+    with stale state.
+    """
+    if not gh_available():
+        return None
+    try:
+        r = subprocess.run(
+            [
+                "gh",
+                "pr",
+                "list",
+                "--repo",
+                target_repo,
+                "--state",
+                "open",
+                "--limit",
+                str(max(1, limit)),
+                "--json",
+                "number",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+        logger.warning("gh pr count failed for %s: %s", target_repo, e)
+        return None
+    try:
+        items = json.loads(r.stdout)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(items, list):
+        return None
+    return sum(
+        1 for item in items if isinstance(item, dict) and isinstance(item.get("number"), int)
+    )
+
+
 def has_open_pr_with_label(
     target_repo: str,
     label: str,
@@ -438,6 +485,7 @@ def init_labels(target_repo: str, labels: dict[str, str] | None = None) -> dict[
 
 __all__ = [
     "STANDARD_LABELS",
+    "count_open_pull_requests",
     "create_label",
     "gh_available",
     "has_open_issue_with_label",

@@ -8,8 +8,10 @@ issues, labels, branches, pull requests, checks, reviews, tags, and releases.
 
 Agentry turns one repository into a supervised AI product team. The operator
 decides when to start it, which roles are enabled, which model or CLI each role
-uses, and how much autonomy is allowed. Agentry then runs one work item per role
-cycle and exits that role process cleanly.
+uses, and how much autonomy is allowed. During a run, the operator can also
+pause or resume one role through target-local runtime controls without changing
+the rest of the pipeline. Agentry then runs one work item per role cycle and
+exits that role process cleanly.
 
 The default experience is intentionally local:
 
@@ -101,6 +103,9 @@ the next start and no longer blocks progress.
 
 Role stdout goes to `agentry/logs/<role>/<timestamp>.log`. Runtime files are
 ignored by the generated `agentry/.gitignore` and should not be committed.
+Per-role runtime controls live beside sessions in
+`agentry/state/role-controls.json`; they are supervision state, not committed
+configuration.
 
 Token budgets are visibility controls, not hard stop rules. The design reduces
 waste by preventing unnecessary launches, selecting one queue item before model

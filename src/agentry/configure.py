@@ -83,6 +83,32 @@ def apply_recommended_options(
     return updated
 
 
+def apply_selected_options(
+    target_path: Path | str,
+    *,
+    mode: str | None = None,
+    enable_researcher: bool | None = None,
+    enable_release: bool | None = None,
+    model_profile: str | None = None,
+    auto_merge: bool | None = None,
+    stop_when_queue_empty: bool | None = None,
+) -> dict[str, Any]:
+    """Apply only explicitly selected options to target config."""
+
+    raw = read_raw_config(target_path)
+    updated = build_selected_config(
+        raw,
+        mode=mode,
+        enable_researcher=enable_researcher,
+        enable_release=enable_release,
+        model_profile=model_profile,
+        auto_merge=auto_merge,
+        stop_when_queue_empty=stop_when_queue_empty,
+    )
+    write_raw_config(target_path, updated)
+    return updated
+
+
 def build_recommended_config(
     raw: dict[str, Any],
     *,
@@ -136,6 +162,54 @@ def build_recommended_config(
             if isinstance(trigger, dict) and trigger.get("pr_labels"):
                 trigger.setdefault("pr_check_gate", "settled")
         cfg["args"] = _set_codex_model(cfg.get("args", []), models[role])
+    return data
+
+
+def build_selected_config(
+    raw: dict[str, Any],
+    *,
+    mode: str | None = None,
+    enable_researcher: bool | None = None,
+    enable_release: bool | None = None,
+    model_profile: str | None = None,
+    auto_merge: bool | None = None,
+    stop_when_queue_empty: bool | None = None,
+) -> dict[str, Any]:
+    """Build config with only requested settings changed."""
+
+    data = deepcopy(raw)
+    if mode is not None:
+        selected_mode = mode.strip().lower()
+        if selected_mode not in {"manual", "pipeline", "autonomous"}:
+            raise ValueError("mode must be manual, pipeline, or autonomous")
+        data["mode"] = selected_mode
+
+    if auto_merge is not None or stop_when_queue_empty is not None:
+        data.setdefault("automation", {})
+        if auto_merge is not None:
+            data["automation"]["auto_merge"] = bool(auto_merge)
+        if stop_when_queue_empty is not None:
+            data["automation"]["stop_when_queue_empty"] = bool(stop_when_queue_empty)
+
+    agents = data.setdefault("agents", {})
+    if enable_researcher is not None:
+        if isinstance(agents.get("researcher"), dict):
+            agents["researcher"]["enabled"] = bool(enable_researcher)
+        data.setdefault("research", {})
+        current_mode = str(data.get("mode", "pipeline")).strip().lower()
+        data["research"]["allow_create_issues"] = bool(
+            current_mode == "autonomous" and enable_researcher
+        )
+    if enable_release is not None and isinstance(agents.get("release"), dict):
+        agents["release"]["enabled"] = bool(enable_release)
+
+    if model_profile is not None:
+        if model_profile not in MODEL_PROFILES:
+            raise ValueError(f"unknown model profile: {model_profile}")
+        models = MODEL_PROFILES[model_profile]
+        for role, model in models.items():
+            if isinstance(agents.get(role), dict):
+                agents[role]["args"] = _set_codex_model(agents[role].get("args", []), model)
     return data
 
 
@@ -215,7 +289,9 @@ __all__ = [
     "ROLE_ORDER",
     "TOKEN_BUDGETS",
     "apply_recommended_options",
+    "apply_selected_options",
     "build_recommended_config",
+    "build_selected_config",
     "read_raw_config",
     "summarize_config",
     "write_raw_config",

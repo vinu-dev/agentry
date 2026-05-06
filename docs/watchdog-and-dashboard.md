@@ -12,6 +12,8 @@ starts it again with the target repo's `agentry/start.ps1` or `agentry/start.sh`
 - Use GitHub labels as the durable workflow queue.
 - Keep runtime state inside the target repo under `agentry/state/`.
 - Show role status, logs, token counts, and stop controls in a local dashboard.
+- Let operators enable or disable one role at runtime without changing other
+  roles or rewriting committed config.
 - Work on Windows and Linux with the same target config.
 - Survive crashes, reboots, stale state files, missing CLIs, and exhausted model
   limits without silently spinning.
@@ -39,6 +41,7 @@ Every role writes a session file:
 
 ```text
 agentry/state/sessions/<role>.json
+agentry/state/role-controls.json
 ```
 
 The record includes:
@@ -58,6 +61,11 @@ the role may run again.
 
 This handles normal crash/reboot recovery: old JSON files are harmless, and the
 next Agentry start cleans them up lazily.
+
+Runtime role controls are target-local state. When an operator disables a role,
+Agentry keeps the lightweight scheduler loop alive but skips new subprocesses
+until the role is enabled again or the override is cleared. Other roles continue
+to run from their own sessions and schedules.
 
 Before spawning a role, Agentry may also write a work packet:
 
@@ -172,9 +180,10 @@ The dashboard listens on `127.0.0.1:4783` by default. It shows:
 
 - target repo and run mode
 - role enabled/mode-allowed state
+- configured, runtime, and effective role state
 - current or latest session state
 - active PID, token counts, start time, and latest log tail
-- per-role Stop and Stop All buttons
+- per-role Enable, Disable, Stop, and Stop All buttons
 - a Configure tab for run mode, model profile, Researcher, Release Engineer,
   auto-merge flag, and stop-when-empty flag
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from agentry.dashboard import build_status_payload
+from agentry.runtime_control import set_role_runtime_enabled
 from agentry.session import begin_session, update_session
 
 
@@ -51,6 +52,36 @@ agents:
     assert payload["mode"] == "pipeline"
     roles = {role["role"]: role for role in payload["roles"]}
     assert roles["researcher"]["mode_allowed"] is False
+    assert roles["researcher"]["configured_enabled"] is True
+    assert roles["researcher"]["effective_enabled"] is True
+    assert roles["researcher"]["runtime_override"] is None
     assert roles["implementer"]["mode_allowed"] is True
     assert roles["implementer"]["session"]["pid"] == 123
     assert "line two" in roles["implementer"]["latest_log_tail"]
+
+
+def test_build_status_payload_reports_runtime_override(tmp_path: Path):
+    agentry_dir = tmp_path / "agentry"
+    agentry_dir.mkdir()
+    (agentry_dir / "config.yml").write_text(
+        """
+target_repo: user/repo
+agents:
+  implementer:
+    enabled: true
+    cli: npx
+    interval_min: 5
+    total_min: 60
+    stall_min: 60
+""",
+        encoding="utf-8",
+    )
+    set_role_runtime_enabled(tmp_path, "implementer", False)
+
+    payload = build_status_payload(tmp_path)
+
+    role = payload["roles"][0]
+    assert role["role"] == "implementer"
+    assert role["configured_enabled"] is True
+    assert role["runtime_override"] is False
+    assert role["effective_enabled"] is False

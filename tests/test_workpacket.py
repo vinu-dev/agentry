@@ -51,6 +51,7 @@ def test_write_role_work_packet_includes_trigger_and_context(monkeypatch, tmp_pa
     assert "#12: Ready PR" in text
     assert "checks=green" in text
     assert "Get-Content -Tail 120" in text
+    assert "New PR creation gate" in text
     assert "For PR-triggered roles" in text
     assert "leave labels unchanged" in text
 
@@ -209,6 +210,53 @@ def test_selected_pr_for_role_matches_work_packet_selection(monkeypatch):
     assert selected is not None
     assert selected.number == 30
     assert selected.head_ref_name == "feature/pr-head"
+
+
+def test_write_role_work_packet_blocks_new_pr_candidate_when_limit_reached(
+    monkeypatch,
+    tmp_path: Path,
+):
+    cfg = TargetConfig(
+        target_repo="owner/repo",
+        automation={"max_open_prs": 1, "pr_creation_issue_labels": ["ready-for-test"]},
+        agents={
+            "tester": AgentConfig(
+                cli=sys.executable,
+                args=[],
+                interval_min=5,
+                total_min=1,
+                stall_min=1,
+                trigger={"issue_labels": ["ready-for-test"]},
+            ),
+        },
+    )
+    monkeypatch.setattr("agentry.workpacket.count_open_pull_requests", lambda repo, **kwargs: 1)
+    monkeypatch.setattr(
+        "agentry.workpacket.list_open_issues_with_label",
+        lambda repo, label, *, limit: [
+            {
+                "number": 42,
+                "title": "Existing PR retest",
+                "labels": [{"name": label}, {"name": "pr-open"}],
+                "updatedAt": "2026-05-05T00:00:00Z",
+            },
+            {
+                "number": 43,
+                "title": "Would open another PR",
+                "labels": [{"name": label}],
+                "updatedAt": "2026-05-05T00:00:00Z",
+            },
+        ],
+    )
+
+    path = write_role_work_packet(tmp_path, cfg, "tester", cfg.agents["tester"])
+
+    assert path is not None
+    text = path.read_text(encoding="utf-8")
+    assert "- Number: #42" in text
+    assert "Process ONLY issue #42" in text
+    assert "#43: Would open another PR" in text
+    assert "blocked=open-pr-limit 1/1" in text
 
 
 def test_write_role_work_packet_respects_byte_cap(monkeypatch, tmp_path: Path):
