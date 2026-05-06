@@ -12,6 +12,7 @@ from urllib.parse import urlparse
 
 from agentry.config import load_target_config, target_logs_dir
 from agentry.configure import apply_recommended_options, read_raw_config, summarize_config
+from agentry.runtime_control import role_runtime_state, set_role_runtime_enabled
 from agentry.session import list_sessions, read_log_tail, stop_all_sessions, stop_session
 
 
@@ -61,6 +62,24 @@ def run_dashboard(target_path: Path, *, host: str = "127.0.0.1", port: int = 478
                     self._send_json({"stopped": {role: stop_session(target_path, role)}})
                 else:
                     self._send_json({"stopped": stop_all_sessions(target_path)})
+                return
+            if parsed.path == "/api/role-control":
+                payload = self._read_json()
+                role = payload.get("role")
+                enabled = payload.get("enabled")
+                if not isinstance(role, str) or role not in load_target_config(target_path).agents:
+                    self._send_json({"error": "unknown role"}, status=HTTPStatus.BAD_REQUEST)
+                    return
+                if not isinstance(enabled, bool):
+                    self._send_json(
+                        {"error": "enabled must be true or false"},
+                        status=HTTPStatus.BAD_REQUEST,
+                    )
+                    return
+                set_role_runtime_enabled(target_path, role, enabled)
+                if not enabled and payload.get("stop_active") is True:
+                    stop_session(target_path, role)
+                self._send_json(build_status_payload(target_path))
                 return
             self.send_error(HTTPStatus.NOT_FOUND, "not found")
 
@@ -112,10 +131,18 @@ def build_status_payload(target_path: Path) -> dict:
     roles = []
     for role, agent in cfg.agents.items():
         latest_log = _latest_log(log_root / role)
+        runtime_state = role_runtime_state(
+            target_path,
+            role,
+            configured_enabled=agent.enabled,
+        )
         roles.append(
             {
                 "role": role,
-                "enabled": agent.enabled,
+                "enabled": runtime_state.effective_enabled,
+                "effective_enabled": runtime_state.effective_enabled,
+                "configured_enabled": runtime_state.configured_enabled,
+                "runtime_override": runtime_state.runtime_override,
                 "mode_allowed": _mode_allows(cfg.mode, role, cfg.research.allow_create_issues),
                 "cli": agent.cli,
                 "args": agent.args,
@@ -265,14 +292,25 @@ _HTML = r"""<!doctype html>
         div.className = 'panel';
         div.innerHTML = `
           <div class="row"><strong>${role.role}</strong><span class="badge ${cls}">${state}</span></div>
-          <div class="row"><span>Enabled</span><span>${role.enabled && role.mode_allowed}</span></div>
+          <div class="row"><span>Enabled</span><span>${role.effective_enabled && role.mode_allowed}</span></div>
+          <div class="row"><span>Runtime</span><span>${runtimeText(role)}</span></div>
           <div class="row"><span>PID</span><span>${s.pid || ''}</span></div>
           <div class="row"><span>Tokens</span><span>${s.tokens_used || ''} / ${role.token_budget || ''}</span></div>
           <div class="row"><span>Started</span><span>${s.started_at || ''}</span></div>
+          <button data-enable="${role.role}">Enable</button>
+          <button class="danger" data-disable="${role.role}">Disable</button>
           <button class="danger" data-stop="${role.role}">Stop</button>
           <pre>${escapeHtml(role.latest_log_tail || '')}</pre>`;
         roles.appendChild(div);
       }
+      document.querySelectorAll('[data-enable]').forEach(btn => btn.addEventListener('click', async () => {
+        await fetch('/api/role-control', { method: 'POST', body: JSON.stringify({ role: btn.dataset.enable, enabled: true }) });
+        await loadStatus();
+      }));
+      document.querySelectorAll('[data-disable]').forEach(btn => btn.addEventListener('click', async () => {
+        await fetch('/api/role-control', { method: 'POST', body: JSON.stringify({ role: btn.dataset.disable, enabled: false }) });
+        await loadStatus();
+      }));
       document.querySelectorAll('[data-stop]').forEach(btn => btn.addEventListener('click', async () => {
         await fetch('/api/stop', { method: 'POST', body: JSON.stringify({ role: btn.dataset.stop }) });
         await loadStatus();
@@ -281,6 +319,12 @@ _HTML = r"""<!doctype html>
 
     function escapeHtml(s) {
       return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    function runtimeText(role) {
+      if (role.runtime_override === true) return 'enabled';
+      if (role.runtime_override === false) return 'disabled';
+      return role.configured_enabled ? 'config enabled' : 'config disabled';
     }
 
     document.getElementById('refresh').addEventListener('click', loadStatus);

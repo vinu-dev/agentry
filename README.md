@@ -204,6 +204,26 @@ Stop safely:
 ./agentry/start.sh stop --target . --all
 ```
 
+Pause or resume one role at runtime without editing committed config:
+
+```powershell
+.\agentry\start.ps1 role disable researcher --target .
+.\agentry\start.ps1 role enable researcher --target .
+.\agentry\start.ps1 role list --target .
+```
+
+```bash
+./agentry/start.sh role disable researcher --target .
+./agentry/start.sh role enable researcher --target .
+./agentry/start.sh role list --target .
+```
+
+Runtime role controls are stored in `agentry/state/role-controls.json`. They
+affect only the named role, are visible in `status` and the dashboard, and do
+not rewrite `agentry/config.yml`. A disabled role will not start new sessions;
+use `role disable <role> --stop-active` or `stop <role>` if an in-flight
+subprocess also needs to be interrupted.
+
 Agentry records one session per role under `agentry/state/sessions/`. On restart
 after a crash or reboot, old running sessions whose PIDs are gone are marked
 `stale` and do not block new work.

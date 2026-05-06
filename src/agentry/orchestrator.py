@@ -36,6 +36,7 @@ from agentry.github import (
 )
 from agentry.notify import DiscordNotifier, Event
 from agentry.prompt import build_role_prompt
+from agentry.runtime_control import role_effective_enabled, role_runtime_state
 from agentry.session import (
     active_session,
     begin_session,
@@ -50,6 +51,7 @@ from agentry.workpacket import SelectedPullRequest, selected_pr_for_role, write_
 logger = logging.getLogger(__name__)
 
 USAGE_LIMIT_BACKOFF_FALLBACK_SECONDS = 4 * 60 * 60
+RUNTIME_CONTROL_POLL_SECONDS = 5
 _USAGE_LIMIT_RE = re.compile(
     r"you've hit your usage limit.*?try again at\s+"
     r"(?P<hour>\d{1,2}):(?P<minute>\d{2})\s*(?P<ampm>[AP]M)",
@@ -73,21 +75,19 @@ class Orchestrator:
         self._threads: list[threading.Thread] = []
 
     def start(self) -> None:
-        enabled_agents = {
+        managed_agents = {
             role: cfg
             for role, cfg in self.target_config.agents.items()
-            if cfg.enabled and _role_allowed_by_mode(self.target_config, role)
+            if _role_allowed_by_mode(self.target_config, role)
         }
-        all_roles = sorted(enabled_agents.keys())
-        disabled_roles = sorted(
-            role
-            for role, cfg in self.target_config.agents.items()
-            if not cfg.enabled or not _role_allowed_by_mode(self.target_config, role)
+        all_roles = sorted(managed_agents.keys())
+        blocked_roles = sorted(
+            role for role in self.target_config.agents if role not in managed_agents
         )
-        for role in disabled_roles:
-            logger.info("role %s disabled or blocked by mode; not starting thread", role)
+        for role in blocked_roles:
+            logger.info("role %s blocked by mode; not starting thread", role)
         for role, cfg in self.target_config.agents.items():
-            if role not in enabled_agents:
+            if role not in managed_agents:
                 continue
             t = threading.Thread(
                 target=self._role_loop_with_recovery,
@@ -150,21 +150,40 @@ class Orchestrator:
 
     def _role_loop(self, role: str, cfg: AgentConfig, all_roles: list[str]) -> None:
         log_dir = target_logs_dir(self.target_path) / role
-        log_dir.mkdir(parents=True, exist_ok=True)
-
-        if not cfg.run_on_start:
-            logger.info("role %s waiting %d minutes before first run", role, cfg.interval_min)
-            self.notifier.emit(
-                Event(
-                    role=role,
-                    kind="deferred",
-                    message=f"first run deferred for {cfg.interval_min} minutes",
-                )
-            )
-            if self.shutdown_event.wait(timeout=cfg.interval_min * 60):
-                return
+        first_run_pending = True
 
         while not self.shutdown_event.is_set():
+            if not role_effective_enabled(
+                self.target_path,
+                role,
+                configured_enabled=cfg.enabled,
+            ):
+                message = _role_disabled_message(self.target_path, role, cfg)
+                logger.info("role %s skipped: %s", role, message)
+                self.notifier.emit(Event(role=role, kind="role-disabled", message=message))
+                if self.shutdown_event.wait(
+                    timeout=min(cfg.interval_min * 60, RUNTIME_CONTROL_POLL_SECONDS)
+                ):
+                    return
+                continue
+
+            log_dir.mkdir(parents=True, exist_ok=True)
+
+            if first_run_pending and not cfg.run_on_start:
+                first_run_pending = False
+                logger.info("role %s waiting %d minutes before first run", role, cfg.interval_min)
+                self.notifier.emit(
+                    Event(
+                        role=role,
+                        kind="deferred",
+                        message=f"first run deferred for {cfg.interval_min} minutes",
+                    )
+                )
+                if self.shutdown_event.wait(timeout=cfg.interval_min * 60):
+                    return
+                continue
+            first_run_pending = False
+
             existing = active_session(self.target_path, role)
             if existing is not None:
                 logger.info("role %s skipped: existing running session", role)
@@ -575,6 +594,13 @@ def _no_work_message(target_config: TargetConfig, role: str, cfg: AgentConfig) -
     if trigger.pr_labels and trigger.pr_check_gate != "none":
         suffix = f" passing pr_check_gate={trigger.pr_check_gate}"
     return f"no matching work for {', '.join(labels)}{suffix}"
+
+
+def _role_disabled_message(target_path: Path, role: str, cfg: AgentConfig) -> str:
+    state = role_runtime_state(target_path, role, configured_enabled=cfg.enabled)
+    if state.runtime_override is False:
+        return "disabled by runtime role control"
+    return "disabled in config"
 
 
 def _is_git_repo(path: Path) -> bool:

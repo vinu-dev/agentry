@@ -29,6 +29,7 @@ from agentry.orchestrator import (
     _role_has_work,
     _usage_limit_backoff_seconds,
 )
+from agentry.runtime_control import set_role_runtime_enabled
 from agentry.session import read_session
 from agentry.workpacket import SelectedPullRequest
 
@@ -179,11 +180,11 @@ def test_usage_limit_backoff_ignores_normal_logs(tmp_path: Path):
     assert _usage_limit_backoff_seconds(log_path) is None
 
 
-def test_disabled_roles_do_not_start_threads(tmp_path: Path):
+def test_disabled_roles_start_control_thread_but_do_not_spawn(tmp_path: Path):
     target_config = TargetConfig(
         target_repo="test/repo",
         agents={
-            "researcher": AgentConfig(
+            "tester": AgentConfig(
                 enabled=False,
                 cli=sys.executable,
                 args=["-c", "print('should not run')"],
@@ -211,9 +212,9 @@ def test_disabled_roles_do_not_start_threads(tmp_path: Path):
     )
     try:
         orch.start()
-        assert [t.name for t in orch._threads] == ["role-implementer"]
+        assert sorted(t.name for t in orch._threads) == ["role-implementer", "role-tester"]
 
-        disabled_log_dir = target_logs_dir(tmp_path) / "researcher"
+        disabled_log_dir = target_logs_dir(tmp_path) / "tester"
         enabled_log_dir = target_logs_dir(tmp_path) / "implementer"
         deadline = time.monotonic() + 30.0
         while time.monotonic() < deadline:
@@ -225,6 +226,50 @@ def test_disabled_roles_do_not_start_threads(tmp_path: Path):
         logs = list(enabled_log_dir.glob("*.log"))
         assert logs
         assert "enabled role ran" in logs[0].read_text(encoding="utf-8")
+    finally:
+        orch.shutdown()
+        orch.notifier.stop(timeout=2.0)
+
+
+def test_runtime_enable_can_start_config_disabled_role(monkeypatch, tmp_path: Path):
+    monkeypatch.setattr("agentry.orchestrator.RUNTIME_CONTROL_POLL_SECONDS", 0.2)
+    target_config = TargetConfig(
+        target_repo="test/repo",
+        agents={
+            "tester": AgentConfig(
+                enabled=False,
+                cli=sys.executable,
+                args=["-c", "print('runtime enabled role ran')"],
+                interval_min=1,
+                total_min=1,
+                stall_min=1,
+                prompt="disabled until runtime enable",
+            ),
+        },
+    )
+    notifier = DiscordNotifier(webhook_url=None, flush_seconds=10)
+    notifier.start()
+    orch = Orchestrator(
+        target_config=target_config,
+        target_path=tmp_path,
+        notifier=notifier,
+    )
+    try:
+        orch.start()
+        log_dir = target_logs_dir(tmp_path) / "tester"
+        time.sleep(0.5)
+        assert not log_dir.exists()
+
+        set_role_runtime_enabled(tmp_path, "tester", True)
+        deadline = time.monotonic() + 10.0
+        while time.monotonic() < deadline:
+            if log_dir.is_dir() and any(log_dir.glob("*.log")):
+                break
+            time.sleep(0.2)
+
+        logs = list(log_dir.glob("*.log"))
+        assert logs
+        assert "runtime enabled role ran" in logs[0].read_text(encoding="utf-8")
     finally:
         orch.shutdown()
         orch.notifier.stop(timeout=2.0)

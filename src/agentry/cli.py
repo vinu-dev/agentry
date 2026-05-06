@@ -39,6 +39,7 @@ from agentry.config import (
 from agentry.configure import (
     MODEL_PROFILES,
     apply_recommended_options,
+    apply_selected_options,
     read_raw_config,
     summarize_config,
 )
@@ -47,6 +48,12 @@ from agentry.github import gh_available, list_labels, repo_exists
 from agentry.github import init_labels as gh_init_labels
 from agentry.notify import DiscordNotifier
 from agentry.orchestrator import Orchestrator, _role_allowed_by_mode
+from agentry.runtime_control import (
+    clear_role_runtime_override,
+    read_role_controls,
+    role_runtime_state,
+    set_role_runtime_enabled,
+)
 from agentry.session import active_session, list_sessions, stop_all_sessions, stop_session
 from agentry.supervisor import resolve_cli
 from agentry.version import __version__
@@ -264,15 +271,24 @@ def start(target_path: Path) -> None:
     active_count = sum(
         1
         for role, cfg in target_config.agents.items()
-        if cfg.enabled and _role_allowed_by_mode(target_config, role)
+        if _role_allowed_by_mode(target_config, role)
+        and role_runtime_state(
+            target_path,
+            role,
+            configured_enabled=cfg.enabled,
+        ).effective_enabled
     )
     configured_count = sum(1 for cfg in target_config.agents.values() if cfg.enabled)
-    disabled_count = len(target_config.agents) - configured_count
+    disabled_count = len(target_config.agents) - active_count
+    runtime_override_count = len(
+        [role for role in read_role_controls(target_path) if role in target_config.agents]
+    )
 
     click.secho(
         f"agentry started for {target_config.target_repo} "
         f"({active_count} active roles, {configured_count} enabled in config, "
-        f"{disabled_count} disabled, mode={target_config.mode})\n"
+        f"{disabled_count} disabled or blocked, {runtime_override_count} runtime overrides, "
+        f"mode={target_config.mode})\n"
         f"  target: {target_path}\n"
         f"  logs:   {target_logs_dir(target_path)}\n"
         "press Ctrl-C to stop.",
@@ -317,31 +333,46 @@ def status(target_path: Path) -> None:
         f" auto_merge={target_config.automation.auto_merge},"
         f" stop_when_queue_empty={target_config.automation.stop_when_queue_empty}"
     )
-    enabled_count = sum(1 for cfg in target_config.agents.values() if cfg.enabled)
+    runtime_states = {
+        role: role_runtime_state(target_path, role, configured_enabled=cfg.enabled)
+        for role, cfg in target_config.agents.items()
+    }
+    enabled_count = sum(1 for state in runtime_states.values() if state.effective_enabled)
     disabled_count = len(target_config.agents) - enabled_count
-    click.echo(f"roles ({enabled_count} enabled, {disabled_count} disabled):")
+    runtime_override_count = sum(
+        1 for state in runtime_states.values() if state.runtime_override is not None
+    )
+    override_suffix = (
+        f", {runtime_override_count} runtime override{'' if runtime_override_count == 1 else 's'}"
+        if runtime_override_count
+        else ""
+    )
+    click.echo(f"roles ({enabled_count} enabled, {disabled_count} disabled{override_suffix}):")
 
     for role in sorted(target_config.agents):
-        cfg = target_config.agents[role]
+        runtime_state = runtime_states[role]
         allowed = _role_allowed_by_mode(target_config, role)
         session = sessions.get(role)
         session_state = _format_session_state(session)
-        if not cfg.enabled:
-            click.secho(f"  {role}: disabled ({session_state})", fg="cyan")
+        runtime_label = _format_runtime_label(runtime_state)
+        decorated_session_state = _decorate_session_state(runtime_label, session_state)
+        if not runtime_state.effective_enabled:
+            label = runtime_label or "disabled"
+            click.secho(f"  {role}: {label} ({session_state})", fg="cyan")
             continue
         if not allowed:
-            click.secho(f"  {role}: blocked by mode ({session_state})", fg="cyan")
+            click.secho(f"  {role}: blocked by mode ({decorated_session_state})", fg="cyan")
             continue
         role_logs = log_root / role
         if not role_logs.is_dir():
-            click.secho(f"  {role}: no log dir yet ({session_state})", fg="yellow")
+            click.secho(f"  {role}: no log dir yet ({decorated_session_state})", fg="yellow")
             continue
         all_logs = sorted(role_logs.glob("*.log"))
         if not all_logs:
-            click.secho(f"  {role}: no runs yet ({session_state})", fg="yellow")
+            click.secho(f"  {role}: no runs yet ({decorated_session_state})", fg="yellow")
             continue
         latest = all_logs[-3:]
-        click.echo(f"  {role}: {len(all_logs)} runs total ({session_state})")
+        click.echo(f"  {role}: {len(all_logs)} runs total ({decorated_session_state})")
         for p in latest:
             size = p.stat().st_size
             click.echo(f"    - {p.name} ({size} bytes)")
@@ -362,6 +393,18 @@ def _format_session_state(session: dict | None) -> str:
     if session.get("budget_exceeded"):
         bits.append("budget-exceeded")
     return ", ".join(bits)
+
+
+def _format_runtime_label(state) -> str | None:
+    if state.runtime_override is None:
+        return None
+    return "runtime-enabled" if state.effective_enabled else "runtime-disabled"
+
+
+def _decorate_session_state(runtime_label: str | None, session_state: str) -> str:
+    if not runtime_label:
+        return session_state
+    return f"{runtime_label}, {session_state}"
 
 
 # -----------------------------------------------------------------------------
@@ -398,6 +441,114 @@ def stop(target_path: Path, all_roles: bool, role: str | None) -> None:
         click.secho(f"{role}: no active session; marking stopped if state exists", fg="yellow")
     stopped = stop_session(target_path, role)
     click.secho(f"{role}: {'stop signal sent' if stopped else 'marked stopped'}", fg="green")
+
+
+# -----------------------------------------------------------------------------
+# runtime role controls
+# -----------------------------------------------------------------------------
+
+
+@cli.group("role")
+def role_control_group() -> None:
+    """Enable, disable, or inspect one role at runtime."""
+
+
+@role_control_group.command("list")
+@click.option(
+    "--target",
+    "target_path",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    default=Path.cwd(),
+)
+def role_list(target_path: Path) -> None:
+    """List effective per-role runtime state."""
+
+    target_path = target_path.resolve()
+    target_config = load_target_config(target_path)
+    sessions = {record.get("role"): record for record in list_sessions(target_path)}
+    click.echo(f"roles for {target_config.target_repo}:")
+    for role in sorted(target_config.agents):
+        cfg = target_config.agents[role]
+        state = role_runtime_state(target_path, role, configured_enabled=cfg.enabled)
+        allowed = _role_allowed_by_mode(target_config, role)
+        session_state = _format_session_state(sessions.get(role))
+        status = "enabled" if state.effective_enabled else "disabled"
+        if not allowed:
+            status = "blocked-by-mode"
+        source = _format_runtime_label(state) or "config"
+        click.echo(
+            f"  {role}: {status} "
+            f"(source={source}, configured={cfg.enabled}, session={session_state})"
+        )
+
+
+@role_control_group.command("enable")
+@click.option(
+    "--target",
+    "target_path",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    default=Path.cwd(),
+)
+@click.argument("role")
+def role_enable(target_path: Path, role: str) -> None:
+    """Enable a configured role at runtime."""
+
+    target_path = target_path.resolve()
+    _ensure_known_role(target_path, role)
+    set_role_runtime_enabled(target_path, role, True)
+    click.secho(f"{role}: runtime-enabled", fg="green")
+
+
+@role_control_group.command("disable")
+@click.option(
+    "--target",
+    "target_path",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    default=Path.cwd(),
+)
+@click.option(
+    "--stop-active",
+    is_flag=True,
+    help="Also stop the role's currently recorded active subprocess, if any.",
+)
+@click.argument("role")
+def role_disable(target_path: Path, role: str, stop_active: bool) -> None:
+    """Disable a configured role at runtime."""
+
+    target_path = target_path.resolve()
+    _ensure_known_role(target_path, role)
+    set_role_runtime_enabled(target_path, role, False)
+    click.secho(f"{role}: runtime-disabled", fg="yellow")
+    if stop_active:
+        stopped = stop_session(target_path, role)
+        click.secho(
+            f"{role}: {'stop signal sent' if stopped else 'no active session to stop'}",
+            fg="green" if stopped else "yellow",
+        )
+
+
+@role_control_group.command("clear")
+@click.option(
+    "--target",
+    "target_path",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    default=Path.cwd(),
+)
+@click.argument("role")
+def role_clear(target_path: Path, role: str) -> None:
+    """Clear a runtime override so the role follows config again."""
+
+    target_path = target_path.resolve()
+    _ensure_known_role(target_path, role)
+    clear_role_runtime_override(target_path, role)
+    click.secho(f"{role}: runtime override cleared", fg="green")
+
+
+def _ensure_known_role(target_path: Path, role: str) -> None:
+    target_config = load_target_config(target_path)
+    if role not in target_config.agents:
+        valid = ", ".join(sorted(target_config.agents))
+        raise click.UsageError(f"unknown role {role!r}; configured roles: {valid}")
 
 
 # -----------------------------------------------------------------------------
@@ -444,14 +595,16 @@ def configure_cmd(
     raw = read_raw_config(target_path)
     current = summarize_config(raw)
 
-    if not use_defaults and _no_config_options(
+    interactive = not use_defaults and _no_config_options(
         mode,
         model_profile,
         enable_researcher,
         enable_release,
         auto_merge,
         stop_when_queue_empty,
-    ):
+    )
+
+    if interactive:
         selected_mode = click.prompt(
             "Run mode",
             default=str(current.get("mode") or "pipeline"),
@@ -486,25 +639,37 @@ def configure_cmd(
             "Stop when queue is empty",
             default=bool(automation.get("stop_when_queue_empty", False)),
         )
-    else:
-        selected_mode = mode or "pipeline"
-        selected_profile = model_profile or "balanced"
-        selected_researcher = bool(enable_researcher) if enable_researcher is not None else False
-        selected_release = bool(enable_release) if enable_release is not None else False
-        selected_auto_merge = bool(auto_merge) if auto_merge is not None else False
-        selected_stop_empty = (
-            bool(stop_when_queue_empty) if stop_when_queue_empty is not None else False
+        updated = apply_recommended_options(
+            target_path,
+            mode=selected_mode,
+            enable_researcher=selected_researcher,
+            enable_release=selected_release,
+            model_profile=selected_profile,
+            auto_merge=selected_auto_merge,
+            stop_when_queue_empty=selected_stop_empty,
         )
-
-    updated = apply_recommended_options(
-        target_path,
-        mode=selected_mode,
-        enable_researcher=selected_researcher,
-        enable_release=selected_release,
-        model_profile=selected_profile,
-        auto_merge=selected_auto_merge,
-        stop_when_queue_empty=selected_stop_empty,
-    )
+    elif use_defaults:
+        updated = apply_recommended_options(
+            target_path,
+            mode=mode or "pipeline",
+            enable_researcher=bool(enable_researcher) if enable_researcher is not None else False,
+            enable_release=bool(enable_release) if enable_release is not None else False,
+            model_profile=model_profile or "balanced",
+            auto_merge=bool(auto_merge) if auto_merge is not None else False,
+            stop_when_queue_empty=bool(stop_when_queue_empty)
+            if stop_when_queue_empty is not None
+            else False,
+        )
+    else:
+        updated = apply_selected_options(
+            target_path,
+            mode=mode,
+            enable_researcher=enable_researcher,
+            enable_release=enable_release,
+            model_profile=model_profile,
+            auto_merge=auto_merge,
+            stop_when_queue_empty=stop_when_queue_empty,
+        )
     summary = summarize_config(updated)
     click.secho(f"updated {target_config_file(target_path)}", fg="green")
     click.echo(f"mode: {summary['mode']}")
