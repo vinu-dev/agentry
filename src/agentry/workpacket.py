@@ -14,6 +14,7 @@ from pathlib import Path
 
 from agentry.config import AgentConfig, TargetConfig, target_state_dir
 from agentry.github import (
+    count_open_pull_requests,
     list_open_issues_with_label,
     list_open_prs_with_label,
     pr_checks_state,
@@ -29,6 +30,7 @@ class WorkCandidate:
     label: str
     item: dict
     checks: str | None = None
+    blocked_reason: str | None = None
 
 
 @dataclass(frozen=True)
@@ -182,10 +184,23 @@ def _build_packet(
             "- If a Selected Candidate is present, process only that item in this run.",
             "- Do not inspect, relabel, test, review, or repair other candidates except "
             "to verify they do not block the Selected Candidate.",
+            _pr_creation_context_rule(target_config),
             _ci_pending_context_rule(trigger),
         ]
     )
     return "\n".join(lines) + "\n"
+
+
+def _pr_creation_context_rule(target_config: TargetConfig) -> str:
+    labels = ", ".join(target_config.automation.pr_creation_issue_labels)
+    return (
+        "- New PR creation gate: issues without `pr-open` under "
+        f"[{labels}] must not open another pull request while the target has "
+        f"{target_config.automation.max_open_prs} open PR(s). Before any "
+        "`gh pr create`, re-check the open PR count, fetch/rebase on "
+        "`origin/main`, and stop with `merge-conflict` if the branch cannot "
+        "be made current cleanly."
+    )
 
 
 def _ci_pending_context_rule(trigger) -> str:
@@ -227,7 +242,15 @@ def _candidate_groups(
             label,
             limit=target_config.context.candidate_limit,
         )
-        groups.append(("issue", label, [WorkCandidate("issue", label, item) for item in issues]))
+        blocked_reason = _issue_label_pr_creation_block_reason(target_config, label)
+        candidates = []
+        for item in issues:
+            item_labels = _label_names_set(item.get("labels"))
+            reason = None
+            if "pr-open" not in item_labels:
+                reason = blocked_reason
+            candidates.append(WorkCandidate("issue", label, item, blocked_reason=reason))
+        groups.append(("issue", label, candidates))
 
     for label in trigger.pr_labels:
         prs = list_open_prs_with_label(
@@ -253,7 +276,7 @@ def _select_candidate(
 ) -> WorkCandidate | None:
     trigger = cfg.trigger
     for kind, _label, candidates in groups:
-        eligible = list(candidates)
+        eligible = [candidate for candidate in candidates if candidate.blocked_reason is None]
         if kind == "pr" and trigger is not None:
             eligible = [
                 candidate
@@ -327,7 +350,14 @@ def _candidate_lines(
                 f"checks={checks} updated={updated}"
             )
         else:
-            lines.append(f"- #{number}: {title}{marker} labels=[{labels}] updated={updated}")
+            blocked = (
+                f" blocked={candidate.blocked_reason}"
+                if candidate.blocked_reason is not None
+                else ""
+            )
+            lines.append(
+                f"- #{number}: {title}{marker} labels=[{labels}]{blocked} updated={updated}"
+            )
     return lines
 
 
@@ -348,6 +378,25 @@ def _candidate_sort_key(candidate: WorkCandidate) -> tuple[int, str]:
     return (10**12, str(number))
 
 
+def _issue_label_pr_creation_block_reason(
+    target_config: TargetConfig,
+    label: str,
+) -> str | None:
+    automation = target_config.automation
+    if label not in set(automation.pr_creation_issue_labels):
+        return None
+
+    count = count_open_pull_requests(
+        target_config.target_repo,
+        limit=max(automation.max_open_prs + 1, 1),
+    )
+    if count is None:
+        return "open-pr-count-unavailable"
+    if count >= automation.max_open_prs:
+        return f"open-pr-limit {count}/{automation.max_open_prs}"
+    return None
+
+
 def _write_capped(path: Path, text: str, *, max_bytes: int) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     encoded = text.encode("utf-8")
@@ -361,15 +410,19 @@ def _write_capped(path: Path, text: str, *, max_bytes: int) -> None:
 
 
 def _label_names(labels: object) -> str:
+    return ", ".join(sorted(_label_names_set(labels)))
+
+
+def _label_names_set(labels: object) -> set[str]:
     if not isinstance(labels, list):
-        return ""
-    names = []
+        return set()
+    names = set()
     for label in labels:
         if isinstance(label, dict) and isinstance(label.get("name"), str):
-            names.append(label["name"])
+            names.add(label["name"])
         elif isinstance(label, str):
-            names.append(label)
-    return ", ".join(sorted(names))
+            names.add(label)
+    return names
 
 
 def _one_line(value: object) -> str:

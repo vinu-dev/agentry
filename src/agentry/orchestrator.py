@@ -31,8 +31,10 @@ from pathlib import Path
 from agentry.config import AgentConfig, TargetConfig, target_logs_dir, target_worktrees_dir
 from agentry.github import (
     count_open_issues_with_labels,
+    count_open_pull_requests,
     has_open_issue_with_label,
     has_open_pr_with_label,
+    list_open_issues_with_label,
 )
 from agentry.notify import DiscordNotifier, Event
 from agentry.prompt import build_role_prompt
@@ -529,7 +531,7 @@ def _role_has_work(target_config: TargetConfig, role: str, cfg: AgentConfig) -> 
         return True
 
     for label in trigger.issue_labels:
-        if has_open_issue_with_label(target_config.target_repo, label):
+        if _has_open_issue_work_for_label(target_config, label):
             return True
     for label in trigger.pr_labels:
         if has_open_pr_with_label(
@@ -539,6 +541,60 @@ def _role_has_work(target_config: TargetConfig, role: str, cfg: AgentConfig) -> 
         ):
             return True
     return False
+
+
+def _has_open_issue_work_for_label(target_config: TargetConfig, label: str) -> bool:
+    """Return True when an issue label has eligible work after PR fanout gates."""
+    if label not in set(target_config.automation.pr_creation_issue_labels):
+        return has_open_issue_with_label(target_config.target_repo, label)
+
+    block_reason = _pr_creation_block_reason(target_config)
+    if block_reason is None:
+        return has_open_issue_with_label(target_config.target_repo, label)
+
+    # Even while new PR creation is blocked, allow retry/test work for an
+    # already-open PR. Those issues carry pr-open and do not increase PR count.
+    issues = list_open_issues_with_label(
+        target_config.target_repo,
+        label,
+        limit=target_config.context.candidate_limit,
+    )
+    for issue in issues:
+        if "pr-open" in _issue_label_names(issue.get("labels")):
+            return True
+
+    logger.info(
+        "issue label %s skipped by PR creation gate for %s: %s",
+        label,
+        target_config.target_repo,
+        block_reason,
+    )
+    return False
+
+
+def _pr_creation_block_reason(target_config: TargetConfig) -> str | None:
+    automation = target_config.automation
+    count = count_open_pull_requests(
+        target_config.target_repo,
+        limit=max(automation.max_open_prs + 1, 1),
+    )
+    if count is None:
+        return "could not count open PRs"
+    if count >= automation.max_open_prs:
+        return f"open PR limit reached ({count}/{automation.max_open_prs})"
+    return None
+
+
+def _issue_label_names(labels: object) -> set[str]:
+    if not isinstance(labels, list):
+        return set()
+    names: set[str] = set()
+    for label in labels:
+        if isinstance(label, dict) and isinstance(label.get("name"), str):
+            names.add(label["name"])
+        elif isinstance(label, str):
+            names.add(label)
+    return names
 
 
 def _researcher_backlog_needs_work(target_config: TargetConfig) -> bool:

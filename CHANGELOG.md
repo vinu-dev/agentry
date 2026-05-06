@@ -14,6 +14,9 @@ Runtime role-control release.
   configured, runtime, and effective state.
 - Runtime role overrides are stored in target-local
   `agentry/state/role-controls.json`.
+- Issue-triggered PR creation is gated by `automation.max_open_prs` and
+  `automation.pr_creation_issue_labels`, preventing new PR fanout while a
+  target already has the configured number of open PRs.
 
 ### Fixed
 
@@ -21,6 +24,9 @@ Runtime role-control release.
   rewriting model profile, release, auto-merge, and other role defaults.
 - Config-disabled roles keep a lightweight runtime-control loop so operators can
   enable them without restarting Agentry.
+- Standard Tester prompts re-check open PR count and rebase on `origin/main`
+  immediately before `gh pr create`, labeling `merge-conflict` instead of
+  opening a stale or conflicted branch.
 
 ## v0.1.7 - 2026-05-05
 

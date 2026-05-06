@@ -427,6 +427,10 @@ def test_role_trigger_skips_when_no_matching_github_work(monkeypatch, tmp_path: 
         "agentry.orchestrator.has_open_pr_with_label",
         lambda repo, label, **kwargs: False,
     )
+    monkeypatch.setattr(
+        "agentry.orchestrator.count_open_pull_requests",
+        lambda repo, **kwargs: 0,
+    )
 
     assert not _role_has_work(target_config, "tester", target_config.agents["tester"])
 
@@ -481,6 +485,72 @@ def test_role_trigger_runs_when_pr_label_matches(monkeypatch):
     )
 
     assert _role_has_work(target_config, "reviewer", target_config.agents["reviewer"])
+
+
+def test_issue_trigger_blocks_new_pr_creation_when_open_pr_limit_reached(monkeypatch):
+    target_config = TargetConfig(
+        target_repo="test/repo",
+        automation={"max_open_prs": 1, "pr_creation_issue_labels": ["ready-for-test"]},
+        agents={
+            "tester": AgentConfig(
+                cli=sys.executable,
+                args=[],
+                interval_min=60,
+                total_min=1,
+                stall_min=1,
+                trigger={"issue_labels": ["ready-for-test"]},
+            ),
+        },
+    )
+    monkeypatch.setattr(
+        "agentry.orchestrator.count_open_pull_requests",
+        lambda repo, **kwargs: 1,
+    )
+    monkeypatch.setattr(
+        "agentry.orchestrator.list_open_issues_with_label",
+        lambda repo, label, *, limit: [
+            {
+                "number": 72,
+                "title": "Fresh work",
+                "labels": [{"name": "ready-for-test"}],
+            }
+        ],
+    )
+
+    assert not _role_has_work(target_config, "tester", target_config.agents["tester"])
+
+
+def test_issue_trigger_allows_existing_pr_retry_when_open_pr_limit_reached(monkeypatch):
+    target_config = TargetConfig(
+        target_repo="test/repo",
+        automation={"max_open_prs": 1, "pr_creation_issue_labels": ["ready-for-test"]},
+        agents={
+            "tester": AgentConfig(
+                cli=sys.executable,
+                args=[],
+                interval_min=60,
+                total_min=1,
+                stall_min=1,
+                trigger={"issue_labels": ["ready-for-test"]},
+            ),
+        },
+    )
+    monkeypatch.setattr(
+        "agentry.orchestrator.count_open_pull_requests",
+        lambda repo, **kwargs: 3,
+    )
+    monkeypatch.setattr(
+        "agentry.orchestrator.list_open_issues_with_label",
+        lambda repo, label, *, limit: [
+            {
+                "number": 72,
+                "title": "Existing PR retry",
+                "labels": [{"name": "ready-for-test"}, {"name": "pr-open"}],
+            }
+        ],
+    )
+
+    assert _role_has_work(target_config, "tester", target_config.agents["tester"])
 
 
 def test_role_trigger_passes_pr_check_gate(monkeypatch):

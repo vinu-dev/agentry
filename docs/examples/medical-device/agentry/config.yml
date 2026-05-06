@@ -22,6 +22,8 @@ isolate_worktrees: true
 automation:
   auto_merge: false
   stop_when_queue_empty: false
+  max_open_prs: 1
+  pr_creation_issue_labels: ["ready-for-test"]
 
 research:
   allow_create_issues: false

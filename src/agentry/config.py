@@ -144,6 +144,29 @@ class AutomationConfig(BaseModel):
         default=False,
         description="Reserved for future use. Foreground start currently waits for new work.",
     )
+    max_open_prs: int = Field(
+        default=1,
+        ge=0,
+        description=(
+            "Maximum open PRs allowed before Agentry blocks issue-triggered work "
+            "that would create another pull request. Set higher for wider queues."
+        ),
+    )
+    pr_creation_issue_labels: list[str] = Field(
+        default_factory=lambda: ["ready-for-test"],
+        description=(
+            "Issue labels whose roles are expected to create a new pull request "
+            "when the issue does not already have pr-open."
+        ),
+    )
+
+    @field_validator("pr_creation_issue_labels")
+    @classmethod
+    def _non_empty_pr_creation_labels(cls, v: list[str]) -> list[str]:
+        cleaned = [label.strip() for label in v if label.strip()]
+        if len(cleaned) != len(v):
+            raise ValueError("pr_creation_issue_labels cannot contain empty labels")
+        return cleaned
 
 
 class ResearchConfig(BaseModel):
