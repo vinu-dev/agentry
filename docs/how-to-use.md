@@ -240,6 +240,30 @@ Agentry runs in the foreground. Press Ctrl-C or close the terminal to stop it.
 Rebooting the computer stops it too; there is no background service unless you
 create one yourself.
 
+### Pause Or Resume One Role At Runtime
+
+Use runtime role controls when one role needs manual supervision but the rest of
+the pipeline should continue:
+
+```powershell
+.\agentry\start.ps1 role disable researcher --target .
+.\agentry\start.ps1 role enable researcher --target .
+.\agentry\start.ps1 role clear researcher --target .
+.\agentry\start.ps1 role list --target .
+```
+
+```bash
+./agentry/start.sh role disable researcher --target .
+./agentry/start.sh role enable researcher --target .
+./agentry/start.sh role clear researcher --target .
+./agentry/start.sh role list --target .
+```
+
+The override is stored under `agentry/state/role-controls.json`, affects only
+the named role, and is visible in `status` and the dashboard. Disabling a role
+prevents new sessions; add `--stop-active` or use `stop <role>` when the current
+subprocess must also be interrupted.
+
 ---
 
 ## Upgrade An Existing Target

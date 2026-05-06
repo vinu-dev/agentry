@@ -2,6 +2,26 @@
 
 All notable Agentry release changes are recorded here.
 
+## v0.1.8 - 2026-05-06
+
+Runtime role-control release.
+
+### Added
+
+- Operators can enable, disable, clear, and list one role at runtime with
+  `agentry role ...` without rewriting committed target configuration.
+- The dashboard now exposes per-role enable/disable controls and reports
+  configured, runtime, and effective state.
+- Runtime role overrides are stored in target-local
+  `agentry/state/role-controls.json`.
+
+### Fixed
+
+- Non-interactive `configure` calls now preserve unrelated settings instead of
+  rewriting model profile, release, auto-merge, and other role defaults.
+- Config-disabled roles keep a lightweight runtime-control loop so operators can
+  enable them without restarting Agentry.
+
 ## v0.1.7 - 2026-05-05
 
 CI-pending queue guidance release.

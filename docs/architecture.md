@@ -45,6 +45,7 @@ file focuses on the runtime architecture.
 | `configure.py` | Apply recommended modes, model profiles, budgets, and role toggles |
 | `dashboard.py` | Local HTTP status/configuration dashboard |
 | `orchestrator.py` | Starts one role loop per allowed role |
+| `runtime_control.py` | Target-local runtime role enable/disable overrides |
 | `supervisor.py` | Spawns LLM CLIs, watches stdout, handles timeouts/check-ins, and treats fresh stream-JSON tool activity as progress |
 | `session.py` | Writes session JSON, detects stale sessions, stops process trees |
 | `github.py` | Cheap GitHub label/PR checks and label initialization |
@@ -185,6 +186,7 @@ Agentry writes one runtime session file per role:
 ```text
 agentry/state/sessions/<role>.json
 agentry/state/workpackets/<role>.md
+agentry/state/role-controls.json
 ```
 
 The session file records:
@@ -204,6 +206,12 @@ session is marked `stale` and the role can run again.
 
 This is what makes restart recovery simple: after a reboot, old session files do
 not cause token burn and do not permanently block work.
+
+Runtime role controls are stored beside session state. They let an operator set
+an effective enabled/disabled override for one role without rewriting
+`agentry/config.yml` or affecting any other role. The orchestrator checks the
+override before each spawn, so disabled roles skip new subprocesses while other
+roles continue normally.
 
 The work packet is overwritten for each role run. It is intentionally small and
 safe to delete. Its purpose is to prevent the next model invocation from
@@ -302,9 +310,10 @@ default. It shows:
 
 - target repo and run mode
 - role enabled/mode-allowed state
+- configured, runtime, and effective role state
 - latest session state
 - PID, tokens, start time, and log tail
-- per-role Stop and Stop All controls
+- per-role Enable, Disable, Stop, and Stop All controls
 - configuration controls for mode, model profile, Researcher, Release Engineer,
   auto-merge flag, and stop-when-empty flag
 
